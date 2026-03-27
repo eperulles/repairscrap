@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wasion - Production Dashboard</title>
+    <!-- EmailJS SDK para correos automáticos -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --corp-blue: #0f2766;
+            --corp-blue-light: #163a94;
+            --corp-bg: #030c25;
+            --corp-text: #ffffff;
+            --corp-accent: #00d2ff;
+            --surface: rgba(15, 39, 102, 0.4);
+            --surface-border: rgba(255, 255, 255, 0.1);
+            --success: #10b981;
+            --danger: #f43f5e;
+            --text-muted: #94a3b8;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--corp-bg);
+            color: var(--corp-text);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 1. NAVBAR - CORPORATIVO, BLANCO */
+        .navbar {
+            background-color: #ffffff;
+            height: 80px;
+            flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 3rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            position: relative;
+            z-index: 100;
+        }
+
+        .navbar img {
+            position: absolute;
+            top: 15px;
+            left: 3rem;
+            height: 105px; /* Logo superpuesto masivo pero ajustado */
+            width: auto;
+            object-fit: contain;
+            z-index: 9999;
+            background: #ffffff; /* Si la imagen no tiene transparencia, esto crea una tarjeta formal */
+            padding: 10px 14px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            margin-left: 200px; /* Espacio para que el logo flotante no estorbe */
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--corp-blue);
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 600;
+            font-size: 1.05rem;
+            border-bottom: 3px solid var(--corp-blue);
+            padding-bottom: 4px;
+        }
+
+        /* 2. TOP PANEL (REEMPLAZA AL HERO GIGANTE) */
+        .top-panel {
+            background: radial-gradient(circle at 80% 50%, var(--corp-blue-light) 0%, var(--corp-blue) 40%, var(--corp-bg) 100%);
+            padding: 1.5rem 3rem 1.5rem 190px; /* ← RECORRE LOS TEXTOS A LA DERECHA PARA EVADIR EL LOGO */
+            border-bottom: 1px solid var(--surface-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            position: relative;
+        }
+
+        .top-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 30px 30px;
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .top-title h1 {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: 0.2rem;
+        }
+
+        .top-title p {
+            font-size: 0.95rem;
+            color: #e2e8f0;
+        }
+
+        .controls-bar {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid var(--surface-border);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 0.75rem 1.25rem;
+            border-radius: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            position: relative;
+            z-index: 10;
+        }
+
+        .controls-bar label {
+            font-weight: 600;
+            font-family: 'Montserrat', sans-serif;
+            color: #fff;
+            font-size: 0.95rem;
+        }
+
+        .controls-bar select {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--surface-border);
+            color: #fff;
+            padding: 0.5rem 2rem 0.5rem 1rem;
+            border-radius: 0.4rem;
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 1rem;
+            outline: none;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 0.7rem center;
+            background-size: 1em;
+            transition: all 0.3s;
+        }
+
+        .controls-bar select:focus {
+            border-color: var(--corp-accent);
+            box-shadow: 0 0 10px rgba(0, 210, 255, 0.3);
+        }
+
+        .controls-bar select option {
+            background: var(--corp-bg);
+            color: #fff;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--success);
+            font-weight: 600;
+            background: rgba(16, 185, 129, 0.1);
+            padding: 0.4rem 1rem;
+            border-radius: 2rem;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .status-dot {
+            height: 8px; width: 8px; 
+            background-color: var(--success); 
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        /* 3. MAIN DASHBOARD (SCROLL NO REQUERIDO) */
+        .dashboard-container {
+            padding: 1.5rem 3rem;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #configAlert {
+            background: rgba(244, 63, 94, 0.2);
+            border: 1px solid var(--danger);
+            padding: 0.75rem 1rem;
+            border-radius: 0.5rem;
+            text-align: center;
+            font-weight: 600;
+            display: none; 
+            flex-shrink: 0;
+            font-size: 0.9rem;
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .kpi-card {
+            background: var(--surface);
+            padding: 1.25rem 1.5rem;
+            border-radius: 0.5rem;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--surface-border);
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            box-shadow: 0 8px 20px -5px rgba(0,0,0,0.4);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .kpi-card::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px;
+            background: var(--corp-accent);
+        }
+
+        .kpi-card.reprinted::before { background: var(--danger); }
+        .kpi-card.cycle::before { background: #818cf8; }
+        
+        .kpi-title { 
+            font-size: 0.75rem; 
+            color: var(--text-muted); 
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 600; 
+            text-transform: uppercase; 
+            letter-spacing: 1.2px; 
+        }
+        
+        .kpi-value { 
+            font-size: 2.2rem; 
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700; 
+            letter-spacing: -1px;
+            color: #fff;
+            line-height: 1;
+            margin: 0.2rem 0;
+        }
+
+        .kpi-subtext {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .charts-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Mitad y mitad */
+            gap: 1.5rem;
+            flex-grow: 1;
+            min-height: 0; /* Clave para evitar el scroll en flexbox */
+        }
+
+        .chart-container {
+            background: var(--surface);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--surface-border);
+            box-shadow: 0 8px 20px -5px rgba(0,0,0,0.4);
+            height: 100%; /* Llenar la grilla */
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-header {
+            margin-bottom: 0.75rem;
+            flex-shrink: 0;
+        }
+
+        .chart-header h2 { 
+            font-size: 1.15rem; 
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 600; 
+            color: #fff; 
+        }
+        .chart-header p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.2rem;
+        }
+
+        .canvas-wrapper {
+            flex-grow: 1;
+            position: relative;
+            min-height: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* MAGIA RESPONSIVA DE CHARTJS */
+        .canvas-wrapper canvas {
+            position: absolute !important;
+            top: 0 !important; left: 0 !important;
+            width: 100% !important; height: 100% !important;
+        }
+
+        /* ================= FULLSCREEN GRÁFICOS ================= */
+        .chart-container.fullscreen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: none !important;
+            z-index: 99999 !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            background: var(--corp-bg) !important; /* Arreglo del fondo transparente */
+            display: flex;
+            flex-direction: column;
+        }
+        .fullscreen-btn {
+            background: var(--corp-accent);
+            border: none;
+            color: var(--corp-bg);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 700;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(0, 210, 255, 0.25);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .fullscreen-btn:hover { 
+            background: #ffffff; 
+            color: var(--corp-blue);
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 1100px) {
+            .navbar { padding: 0 1.5rem; height: 75px; }
+            .navbar img { height: 85px; left: 1.5rem; top: 10px; padding: 6px; }
+            .nav-links { margin-left: 120px; }
+            .top-panel { padding: 1.5rem 1.5rem 1.5rem 150px; flex-direction: column; gap: 1rem; align-items: flex-start; }
+            .dashboard-container { padding: 1rem 1.5rem; overflow-y: auto; overflow-x: hidden; }
+            .charts-wrapper { grid-template-columns: 1fr; height: 800px; flex-shrink: 0; }
+            .controls-bar { flex-wrap: wrap; width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- NAVBAR CORPORATIVO -->
+    <nav class="navbar">
+        <div class="nav-left">
+            <img src="logo.png" alt="Company Logo" onerror="this.src='https://placehold.co/200x65/white/0d326b?text=WASION+LOGO'">
+        </div>
+        <div class="nav-links">
+            <a href="#" class="active">Live Production</a>
+        </div>
+    </nav>
+
+    <!-- TOP PANEL (MÁS COMPACTO PARA NO HACER SCROLL) -->
+    <div class="top-panel">
+        <div class="top-title">
+            <h1>Intelligent Production Evaluation</h1>
+            <p>Smart Monitoring in Your Hand. Real-time statistical process control.</p>
+        </div>
+        
+        <div class="controls-bar">
+            <label for="lineSelect">Línea:</label>
+            <select id="lineSelect" onchange="updateFilters()">
+                <option value="8">Cargando...</option>
+            </select>
+            
+            <label for="monthFilter">Mes (UCL_MR):</label>
+            <input type="month" id="monthFilter" onchange="updateFilters()">
+            
+            <label for="dayFilter">Día Esp.:</label>
+            <input type="date" id="dayFilter" onchange="updateFilters()">
+            
+            <div class="status-indicator">
+                <span class="status-dot"></span>
+                <span id="connection-status">Live Connected</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN DASHBOARD (100vh Layout) -->
+    <div class="dashboard-container">
+        
+        <div id="configAlert"></div>
+
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-title">Muestra Evaluada</div>
+                <div class="kpi-value" id="kpi-total">0</div>
+                <div class="kpi-subtext">Pares detectados dinámicamente.</div>
+            </div>
+            <div class="kpi-card reprinted">
+                <div class="kpi-title">Unidades Reimpresas</div>
+                <div class="kpi-value" id="kpi-reprinted">0</div>
+                <div class="kpi-subtext">Estado marcado como "reprinted".</div>
+            </div>
+            <div class="kpi-card cycle">
+                <div class="kpi-title">Tiempo de Ciclo Promedio</div>
+                <div class="kpi-value" id="kpi-cycle">0.0s</div>
+                <div class="kpi-subtext">Intervalo de impresión consecutivo.</div>
+            </div>
+        </div>
+
+        <div class="charts-wrapper">
+            <!-- GRÁFICO I -->
+            <div class="chart-container" id="container-chartI">
+                <div class="chart-header" style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div>
+                        <h2>Gráfico I (Valores Individuales)</h2>
+                        <p>Mide el tiempo (ciclo en segundos) transcurrido entre pares de impresión.</p>
+                    </div>
+                    <button class="fullscreen-btn" onclick="toggleFullscreen('container-chartI', true)">⛶ Pantalla Completa</button>
+                </div>
+                <div class="canvas-wrapper">
+                    <canvas id="chartI"></canvas>
+                </div>
+            </div>
+
+            <!-- GRÁFICO MR -->
+            <div class="chart-container" id="container-chartMR">
+                <div class="chart-header" style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div>
+                        <h2>Gráfico MR (Rango Móvil)</h2>
+                        <p>Variación absoluta entre el último rango de ciclos.</p>
+                    </div>
+                    <button class="fullscreen-btn" onclick="toggleFullscreen('container-chartMR', false)">⛶ Pantalla Completa</button>
+                </div>
+                <div class="canvas-wrapper">
+                    <canvas id="chartMR"></canvas>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ========================================================= //
+        // CONFIGURACIÓN DE TABLA Y CONEXIÓN
+        // ========================================================= //
+        const TABLE_NAME = 'serial_logs';
+        const supabaseUrl = 'https://gvxirawhbdptwptmgejr.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2eGlyYXdoYmRwdHdwdG1nZWpyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1NjAzMTAsImV4cCI6MjA4ODEzNjMxMH0.iMkSowxKQizNaBsFtpREaicBBBpB3Zx0CF16f6Z_HxQ';
+        
+        let dbClient = null;
+        let currLineId = '8'; 
+        let chartInstanceI = null;
+        let chartInstanceMR = null;
+        let realtimeSubscription = null;
+
+        const UCL_I_FIXED = 14; 
+        const PLANNED_DOWNTIME_SECS = 300; // 5 minutos = paro contemplado
+        
+        // ========================================================= //
+        // CREDENCIALES GRATUITAS DE EMAILJS (https://www.emailjs.com)
+        // ========================================================= //
+        const EMAILJS_PUBLIC_KEY   = 'PON_TU_PUBLIC_KEY'; 
+        const EMAILJS_SERVICE_ID   = 'PON_TU_SERVICE_ID'; 
+        const EMAILJS_TEMPLATE_ID  = 'PON_TU_TEMPLATE_ID';
+
+        // ESTADO DE ALERTAS
+        let currentAnomalies = [];
+        let timeLastEmailSent = 0;
+        let lastDailyReportSentDate = '';
+        let currentRealSerials = []; // Almacena seriales reales para los tooltips
+
+        // Inicializamos EmailJS si tiene llave
+        if (typeof emailjs !== 'undefined' && EMAILJS_PUBLIC_KEY !== 'PON_TU_PUBLIC_KEY') {
+            emailjs.init(EMAILJS_PUBLIC_KEY);
+        }
+
+        // ========================================================= //
+        // CRONJOB: EMAIL DIARIO A LAS 9:30 PM
+        // ========================================================= //
+        function startDailyReportScheduler() {
+            // Revisar cada 1 minuto
+            setInterval(async () => {
+                const now = new Date();
+                const hours = now.getHours();
+                const mins  = now.getMinutes();
+                const todayStr = now.getFullYear() + '-' + (now.getMonth()+1).toString().padStart(2, '0') + '-' + now.getDate().toString().padStart(2, '0');
+
+                // Si son las 21:30 pm (9:30 PM) y aún no se manda hoy:
+                if (hours === 21 && mins >= 30 && mins <= 45 && lastDailyReportSentDate !== todayStr) {
+                    lastDailyReportSentDate = todayStr; // Marcarlo enviado antes de consultar para evitar repeticiones
+                    
+                    if (typeof emailjs === 'undefined' || EMAILJS_PUBLIC_KEY === 'PON_TU_PUBLIC_KEY') {
+                        console.log("9:30 PM: No envio correo porque EmailJS no configurado.");
+                        return;
+                    }
+
+                    console.log("9:30 PM: Construyendo el reporte SPC diario...");
+                    const startD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).toISOString();
+                    const endD = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 21, 30, 0).toISOString();
+
+                    try {
+                        // Extraer producción completa de hoy
+                        const { data, error } = await dbClient
+                            .from(TABLE_NAME)
+                            .select('*')
+                            .eq('line_id', currLineId)
+                            .gte('printed_at', startD)
+                            .lte('printed_at', endD)
+                            .order('printed_at', { ascending: false });
+
+                        if (!error && data && data.length > 1) {
+                            const params = extractSpcParameters(data);
+                            const anoms = detectIATF(params.cycleTimes, UCL_I_FIXED);
+                            
+                            let bodyText = `Reporte de SPC con Corte a 9:30 PM para Línea ${currLineId} (Día: ${todayStr})\n\n`;
+                            bodyText += `Total de Eventos: ${params.cycleTimes.length}\n`;
+                            bodyText += `Tiempo de Ciclo Promedio: ${params.avgI.toFixed(2)}s\n\n`;
+                            
+                            if (anoms.length === 0) {
+                                bodyText += "✅ Operación Limpia. NO se rompieron reglas IATF hoy.";
+                            } else {
+                                bodyText += `⚠️ Se Detectaron ${anoms.length} Incidencias IATF:\n\n`;
+                                bodyText += anoms.join('\n');
+                            }
+
+                            emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+                                to_email: 'erickperulles@gmail.com',
+                                subject: `📈 Resumen SPC 9:30PM - Línea ${currLineId}`,
+                                message: bodyText
+                            }).then(() => {
+                                console.log("¡Reporte 9:30 PM mandado a erickperulles@gmail.com!");
+                                showError(`✉️ <strong>Reporte Diario Automático Enviado a erickperulles@gmail.com a las 9:30 PM.</strong>`);
+                            }).catch(err => console.error("Falla EmailJS", err));
+                        }
+                    } catch(e) { console.error("Daily report fetch error:", e); }
+                }
+            }, 60000); 
+        }
+
+        // Inicializamos los filtros con la fecha de hoy
+        function initDateFilters() {
+            const now = new Date();
+            const yearMonth = now.toISOString().substring(0, 7); // yyyy-mm
+            document.getElementById('monthFilter').value = yearMonth;
+            document.getElementById('dayFilter').value = ''; // Día en blanco por defecto para traer info general
+        }
+
+        // ========================================================= //
+        // 1. INICIALIZAR LÍNEAS DISPONIBLES
+        // ========================================================= //
+        async function initApp() {
+            try {
+                if (!window.supabase) throw new Error("Supabase bloqueado por red.");
+                if (!window.Chart) throw new Error("ChartJS bloqueado por red.");
+                
+                dbClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+                
+                Chart.defaults.color = '#94a3b8';
+                Chart.defaults.font.family = 'Inter';
+                Chart.defaults.scale.grid.color = 'rgba(255, 255, 255, 0.05)';
+
+                // Iniciar motor de reportes 9:30 PM
+                startDailyReportScheduler();
+
+                initDateFilters();
+
+                const { data, error } = await dbClient.from(TABLE_NAME).select('line_id').limit(5000);
+
+                const selectEl = document.getElementById('lineSelect');
+
+                if (error || !data || data.length === 0) {
+                    if (selectEl) selectEl.innerHTML = '<option value="8">Línea 8</option>';
+                    currLineId = '8';
+                } else {
+                    const uniqueLines = [...new Set(data.map(d => d.line_id))].filter(val => val !== null && val !== undefined);
+                    if (uniqueLines.length === 0) {
+                        if (selectEl) selectEl.innerHTML = '<option value="8">Línea 8</option>';
+                        currLineId = '8';
+                    } else {
+                        if (selectEl) {
+                            selectEl.innerHTML = ''; 
+                            uniqueLines.forEach(line => {
+                                const opt = document.createElement('option');
+                                opt.value = line;
+                                opt.textContent = 'Línea ' + line;
+                                selectEl.appendChild(opt);
+                            });
+                            currLineId = uniqueLines[0]; 
+                            selectEl.value = currLineId;
+                        }
+                    }
+                }
+
+                startRealtime();
+                await fetchData();
+            } catch (err) {
+                console.error("Initialization Error:", err);
+                showError("⚠️ Fallo crítico atrapado: " + err.message);
+                if (dbClient) {
+                    try { startRealtime(); await fetchData(); } catch(ex){}
+                }
+            }
+        }
+
+        // ========================================================= //
+        // 2. ACTUALIZACIÓN DE USUARIO (CUANDO CAMBIAN FILTROS)
+        // ========================================================= //
+        async function updateFilters() {
+            const selectEl = document.getElementById('lineSelect');
+            if(selectEl && selectEl.value) currLineId = selectEl.value;
+            
+            if (dbClient) {
+                try { startRealtime(); await fetchData(); } catch(ex){}
+            }
+        }
+
+        // ========================================================= //
+        // 3. FETCH Y PROCESAMIENTO
+        // ========================================================= //
+        async function fetchData() {
+            try {
+                const monthFilt = document.getElementById('monthFilter').value;
+                const dayFilt = document.getElementById('dayFilter').value;
+
+                let startDateStr, endDateStr;
+
+                if (dayFilt) {
+                    startDateStr = dayFilt + 'T00:00:00.000Z';
+                    endDateStr = dayFilt + 'T23:59:59.999Z';
+                } else if (monthFilt) {
+                    startDateStr = monthFilt + '-01T00:00:00.000Z';
+                    let endD = new Date(startDateStr);
+                    endD.setMonth(endD.getMonth() + 1);
+                    endDateStr = endD.toISOString();
+                }
+
+                // Query base para esta línea y fecha
+                let query = dbClient.from(TABLE_NAME).select('*').eq('line_id', currLineId).order('printed_at', { ascending: false }).limit(200);
+
+                if (startDateStr) query = query.gte('printed_at', startDateStr).lt('printed_at', endDateStr);
+
+                const { data, error } = await query;
+                if (error) throw error;
+
+                // CALCULAR MES PASADO PARA EL MR
+                let prevAvgMr = 0;
+                if (monthFilt) {
+                    let d = new Date(monthFilt + '-01T00:00:00.000Z');
+                    d.setMonth(d.getMonth() - 1);
+                    const prevMonthStart = d.toISOString();
+                    d.setMonth(d.getMonth() + 1);
+                    const prevMonthEnd = d.toISOString();
+
+                    const { data: prevData, error: prevErr } = await dbClient
+                        .from(TABLE_NAME)
+                        .select('printed_at')
+                        .eq('line_id', currLineId)
+                        .gte('printed_at', prevMonthStart)
+                        .lt('printed_at', prevMonthEnd)
+                        .order('printed_at', { ascending: true })
+                        .limit(1000); // Muestra de hasta 1000 registros para calcular el UCL del mes anterior
+
+                    if (!prevErr && prevData && prevData.length > 1) {
+                        const mrData = computeMR_Raw(prevData);
+                        prevAvgMr = calculateLimits(mrData);
+                    }
+                }
+
+                processData(data, prevAvgMr);
+
+            } catch(e) {
+                console.error("Fetch Error:", e);
+                showError("Error de lógica: " + e.message);
+            }
+        }
+
+        function calculateLimits(dataArray) {
+            if (dataArray.length === 0) return 0;
+            return dataArray.reduce((acc, v) => acc + v, 0) / dataArray.length;
+        }
+
+        // Utilidad pura para derivar arreglo de MR excluyendo Paros
+        function computeMR_Raw(ascDataArr) {
+            let evs = [];
+            let last = null;
+            for(let r of ascDataArr) { if(r.printed_at !== last){ evs.push(r); last = r.printed_at; } }
+            
+            let cyc = [], mr = [];
+            for (let i = 1; i < evs.length; i++) {
+                const diffSecs = Math.max(0, (new Date(evs[i].printed_at).getTime() - new Date(evs[i-1].printed_at).getTime()) / 1000);
+                if (diffSecs <= PLANNED_DOWNTIME_SECS) {
+                    cyc.push(diffSecs);
+                    if (cyc.length > 1) mr.push(Math.abs(cyc[cyc.length-1] - cyc[cyc.length-2]));
+                }
+            }
+            return mr;
+        }
+
+        function detectIATF(cycleTimes, uclI) {
+            let anoms = [];
+            for(let i=0; i<cycleTimes.length; i++){
+                if (cycleTimes[i] > uclI) {
+                    anoms.push(`- Exceso LSC: El ciclo ${i+1} fue de ${cycleTimes[i].toFixed(1)}s (Límite: ${uclI}s)`);
+                }
+            }
+            let upTrend = 0;
+            for(let i=1; i<cycleTimes.length; i++){
+                if (cycleTimes[i] > cycleTimes[i-1]) upTrend++; else upTrend = 0;
+                if (upTrend >= 7) anoms.push(`- Tendencia IATF: 7 ciclos consecutivos incrementando detectados cerca del evento ${i+1}`);
+            }
+            return anoms;
+        }
+
+        function extractSpcParameters(rows) {
+            const ascData = [...rows].reverse();
+            let evs = [];
+            let lastTime = null;
+            for (let r of ascData) {
+                if (r.printed_at !== lastTime) { evs.push(r); lastTime = r.printed_at; }
+            }
+
+            let cycleTimes = [];
+            let mrTimes = [];
+            for (let i = 1; i < evs.length; i++) {
+                const diffSecs = Math.max(0, (new Date(evs[i].printed_at).getTime() - new Date(evs[i-1].printed_at).getTime()) / 1000);
+                if (diffSecs <= PLANNED_DOWNTIME_SECS) {
+                    cycleTimes.push(diffSecs);
+                    if (cycleTimes.length > 1) mrTimes.push(Math.abs(diffSecs - cycleTimes[cycleTimes.length - 2]));
+                    else mrTimes.push(0);
+                }
+            }
+            return { cycleTimes, mrTimes, avgI: calculateLimits(cycleTimes), uniqueEvents: evs };
+        }
+
+        function verifyIATFRules(cycleTimes, uclI) {
+            currentAnomalies = detectIATF(cycleTimes, uclI);
+
+            if (currentAnomalies.length > 0) {
+                // NOTA: El correo instantáneo se retiró por solicitud. 
+                // Ahora los registros esperan a enviarse juntos a las 9:30 PM.
+                const mailBody = encodeURIComponent("Dashboard de Producción - IATF\n\nSe detectaron variaciones en Línea " + currLineId + ":\n\n" + currentAnomalies.join("\n"));
+                const ml = `mailto:erickperulles@gmail.com?subject=ALERTA SPC: Línea ${currLineId}&body=${mailBody}`;
+                showError(`⚠️ <strong>Anomalías detectadas (Exceso LSC / Tendencias IATF).</strong> <br><span style="color:#d1d5db; font-size:0.85em;">El sistema almacenó la falla y la enviará auto-agrupada a las 9:30 PM. <a href="${ml}" style="color:yellow; text-decoration:underline;">[ Notificar a erickperulles@gmail.com ahora ]</a></span>`);
+            } else {
+                hideError();
+            }
+        }
+
+        function processData(rows, prevAvgMr) {
+            const ascData = [...rows].reverse();
+            
+            const reprinted = ascData.filter(r => r.status && String(r.status).toLowerCase() === 'reprinted').length;
+            document.getElementById('kpi-reprinted').textContent = reprinted;
+
+            let uniqueEvents = [];
+            let lastTime = null;
+            for (let r of ascData) {
+                if (r.printed_at !== lastTime) { 
+                    // Nuevo evento de tiempo único
+                    uniqueEvents.push({ ...r, all_serials: [r.serial] }); 
+                    lastTime = r.printed_at; 
+                } else {
+                    // Mismo tiempo (pestañas impresas por pares o lotes)
+                    if (uniqueEvents.length > 0) {
+                        uniqueEvents[uniqueEvents.length - 1].all_serials.push(r.serial);
+                    }
+                }
+            }
+
+            document.getElementById('kpi-total').textContent = uniqueEvents.length;
+
+            if (uniqueEvents.length < 2) {
+                renderCharts([], [], [], 0, UCL_I_FIXED, null, 0, 0, 0);
+                document.getElementById('kpi-cycle').textContent = "0.0s";
+                hideError();
+                currentAnomalies = [];
+                return;
+            }
+
+            let cycleTimes = [];
+            let mrTimes = [];
+            let labels = []; // Será puro 1, 2, 3...
+            currentRealSerials = []; // Global cache para tooltips
+
+            let chartCycleData = []; // Para no dibujar paros gigantes en G.I
+            let chartMrData = [];    // Para no dibujar picos MR gigantes
+
+            for (let i = 1; i < uniqueEvents.length; i++) {
+                const diffSecs = Math.max(0, (new Date(uniqueEvents[i].printed_at).getTime() - new Date(uniqueEvents[i-1].printed_at).getTime()) / 1000); 
+                
+                // Texto real del serial para mostrar en tooltips
+                const serialText = uniqueEvents[i].all_serials && uniqueEvents[i].all_serials.length > 0 
+                                    ? uniqueEvents[i].all_serials.join(' & ') 
+                                    : `Ev. ${i}`;
+                
+                // MANEJO DE PAROS CONTEMPLADOS
+                if (diffSecs > PLANNED_DOWNTIME_SECS) {
+                    labels.push(i);
+                    currentRealSerials.push('Paro | ' + serialText);
+                    chartCycleData.push(null); 
+                    chartMrData.push(null);
+                } else {
+                    cycleTimes.push(diffSecs);
+                    labels.push(i);
+                    currentRealSerials.push(serialText);
+                    chartCycleData.push(diffSecs);
+                    
+                    if (cycleTimes.length > 1) {
+                        const delta = Math.abs(diffSecs - cycleTimes[cycleTimes.length - 2]);
+                        mrTimes.push(delta);
+                        chartMrData.push(delta);
+                    } else {
+                        mrTimes.push(0); 
+                        chartMrData.push(0);
+                    }
+                }
+            }
+
+            const avgI = calculateLimits(cycleTimes);
+            
+            // UCL MR Dinámico del Mes Anterior
+            const uclMR = prevAvgMr > 0 ? (3.267 * prevAvgMr) : (3.267 * calculateLimits(mrTimes)); // Fallback a actual si no hay mes previo
+
+            document.getElementById('kpi-cycle').textContent = avgI.toFixed(2) + "s";
+            
+            verifyIATFRules(cycleTimes, UCL_I_FIXED);
+
+            renderCharts(labels, chartCycleData, chartMrData, avgI, UCL_I_FIXED, null, prevAvgMr, uclMR, 0);
+        }
+
+        // ========================================================= //
+        // 4. SUSCRIPCIÓN EN TIEMPO REAL
+        // ========================================================= //
+        function startRealtime() {
+            if (realtimeSubscription) {
+                dbClient.removeChannel(realtimeSubscription);
+            }
+
+            realtimeSubscription = dbClient
+                .channel('realtime_corp_channel')
+                .on('postgres_changes', { event: '*', schema: 'public', table: TABLE_NAME }, (payload) => {
+                    if(payload.new && String(payload.new.line_id) === String(currLineId)) {
+                        // Omito recarga si estamos viendo una fecha específica vieja (Opcional, pero para mantener coherencia re-disparamos)
+                        const dFilt = document.getElementById('dayFilter').value;
+                        if (!dFilt) fetchData(); 
+                    }
+                })
+                .subscribe();
+        }
+
+        // ========================================================= //
+        // UTILIDADES Y RENDERIZADO
+        // ========================================================= //
+        function showError(msg) {
+            const el = document.getElementById('configAlert');
+            el.innerHTML = msg;
+            el.style.display = 'block';
+        }
+        function hideError() {
+            const el = document.getElementById('configAlert');
+            el.innerHTML = '';
+            el.style.display = 'none';
+        }
+
+        function renderCharts(labels, dataI, dataMR, avgI, uclI, lclI, avgMR, uclMR, lclMR) {
+            const mkArr = (val) => Array(labels.length).fill(val);
+
+            // Chart I
+            const ctxI = document.getElementById('chartI').getContext('2d');
+            if (chartInstanceI) chartInstanceI.destroy();
+
+            chartInstanceI = new Chart(ctxI, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Tiempo Ciclo (s)',
+                            data: dataI,
+                            borderColor: '#00d2ff',
+                            backgroundColor: '#00d2ff',
+                            tension: 0.3,
+                            borderWidth: 2,
+                            pointRadius: 3,
+                            pointHoverRadius: 6,
+                            order: 1
+                        },
+                        { label: 'LSC', data: mkArr(uclI), borderColor: '#f43f5e', borderWidth: 1.5, borderDash: [5, 5], pointRadius: 0, order: 2 },
+                        { label: 'Media', data: mkArr(avgI), borderColor: '#10b981', borderWidth: 2, pointRadius: 0, order: 3 },
+                        { label: 'LIC', data: mkArr(lclI), borderColor: '#f43f5e', borderWidth: 1.5, borderDash: [5, 5], pointRadius: 0, order: 4 }
+                    ]
+                },
+                options: getChartOptions('Segundos')
+            });
+
+            // Chart MR
+            const ctxMR = document.getElementById('chartMR').getContext('2d');
+            if (chartInstanceMR) chartInstanceMR.destroy();
+
+            chartInstanceMR = new Chart(ctxMR, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Rango Móvil (|Xi - X i-1|)',
+                            data: dataMR,
+                            borderColor: '#818cf8',
+                            backgroundColor: '#818cf8',
+                            tension: 0.3,
+                            borderWidth: 2,
+                            pointRadius: 3,
+                            pointHoverRadius: 6,
+                            order: 1
+                        },
+                        { label: 'LSC (UCL)', data: mkArr(uclMR), borderColor: '#f43f5e', borderWidth: 1.5, borderDash: [5, 5], pointRadius: 0, order: 2 },
+                        { label: 'Media MR', data: mkArr(avgMR), borderColor: '#10b981', borderWidth: 2, pointRadius: 0, order: 3 }
+                    ]
+                },
+                options: getChartOptions('Variación Abs. (s)')
+            });
+        }
+
+        function toggleFullscreen(containerId, isIChart) {
+            const el = document.getElementById(containerId);
+            const isFullscreen = el.classList.toggle('fullscreen');
+            
+            // Mostrar u ocultar el eje X basado en la pantalla completa (para no saturar a lo lejos)
+            const tgtChart = isIChart ? chartInstanceI : chartInstanceMR;
+            if(tgtChart) {
+                tgtChart.options.scales.x.display = isFullscreen;
+                tgtChart.update('none');
+            }
+
+            // Forzar resize y reset de zoom cuando se cambia la vista para que el canvas se adapte inmediato
+            // Le damos 50ms para permitir al DOM re-evaluar el nuevo tamaño antes de redibujar
+            setTimeout(() => {
+                if(chartInstanceI) { 
+                    chartInstanceI.resetZoom(); 
+                    chartInstanceI.resize(); 
+                }
+                if(chartInstanceMR) { 
+                    chartInstanceMR.resetZoom(); 
+                    chartInstanceMR.resize(); 
+                }
+            }, 50);
+        }
+
+        function getChartOptions(yLabelsText) {
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top', labels: { boxWidth: 12, usePointStyle: true, padding: 5 } },
+                    tooltip: {
+                        backgroundColor: 'rgba(15, 39, 102, 0.95)',
+                        titleColor: '#fff',
+                        bodyColor: '#e2e8f0',
+                        borderColor: 'rgba(255,255,255,0.1)',
+                        borderWidth: 1,
+                        padding: 10,
+                        cornerRadius: 8,
+                        callbacks: {
+                            title: function(context) {
+                                // context[0].dataIndex gives the index
+                                if(currentRealSerials[context[0].dataIndex]) {
+                                    return "Pieza(s): " + currentRealSerials[context[0].dataIndex];
+                                }
+                                return "Evento: " + context[0].label;
+                            }
+                        }
+                    },
+                    zoom: {
+                        pan: { enabled: true, mode: 'x', modifierKey: 'shift' },
+                        zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+                    }
+                },
+                scales: {
+                    y: { beginAtZero: true, title: { display: true, text: yLabelsText } },
+                    x: { 
+                        display: false, // Oculto por defecto en vista normal
+                        title: { display: true, text: 'Id Evento Numérico' },
+                        ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 30 }
+                    }
+                },
+                interaction: { intersect: false, mode: 'index' },
+            };
+        }
+
+        // Ejecutar aplicación asegurando que se dispare incluso si ya cargó
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", initApp);
+        } else {
+            // El navegador ya armó la página, ejecutamos directo
+            initApp();
+        }
+    </script>
+</body>
+</html>

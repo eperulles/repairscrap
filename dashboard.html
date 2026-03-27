@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wasion - Repair & Scrap Dashboard</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- SheetJS (Excel Export) -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    
+    <style>
+        :root {
+            --corp-blue: #0f2766;
+            --corp-blue-light: #163a94;
+            --corp-bg: #030c25;
+            --corp-text: #ffffff;
+            --corp-accent: #00d2ff;
+            --surface: rgba(15, 39, 102, 0.4);
+            --surface-border: rgba(255, 255, 255, 0.1);
+            --success: #10b981;
+            --danger: #f43f5e;
+            --warning: #fbbf24;
+            --text-muted: #94a3b8;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--corp-bg);
+            color: var(--corp-text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* NAVBAR */
+        .navbar {
+            background-color: #ffffff;
+            height: 70px;
+            flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 2rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .navbar img {
+            height: 90px;
+            width: auto;
+            object-fit: contain;
+            background: #ffffff;
+            padding: 8px 12px;
+            border-radius: 10px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            border: 1px solid rgba(0,0,0,0.1);
+            transform: translateY(15px);
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--corp-blue);
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            font-size: 1rem;
+            transition: opacity 0.2s;
+        }
+
+        .nav-links a.active {
+            border-bottom: 3px solid var(--corp-blue);
+            padding-bottom: 2px;
+        }
+
+        /* TOP PANEL / FILTERS */
+        .controls-panel {
+            background: radial-gradient(circle at 50% 0%, var(--corp-blue-light) 0%, var(--corp-bg) 100%);
+            padding: 2.5rem 2rem 1.5rem 2rem;
+            border-bottom: 1px solid var(--surface-border);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .header-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-left: 140px; /* Space for logo */
+        }
+
+        .header-info h1 {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            background: rgba(255,255,255,0.05);
+            padding: 1.25rem;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--surface-border);
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .filter-group label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--corp-accent);
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        .filter-group select, .filter-group input {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--surface-border);
+            color: #fff;
+            padding: 0.6rem;
+            border-radius: 6px;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+        }
+
+        .filter-group select:focus, .filter-group input:focus {
+            border-color: var(--corp-accent);
+        }
+
+        .btn-primary {
+            background: var(--corp-accent);
+            color: var(--corp-blue);
+            border: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 6px;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: 'Montserrat', sans-serif;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 210, 255, 0.4);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: #fff;
+            border: 1px solid var(--surface-border);
+            padding: 0.6rem 1.2rem;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* KPI SECTION */
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            padding: 1.5rem 2rem;
+        }
+
+        .kpi-card {
+            background: var(--surface);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--surface-border);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .kpi-card::after {
+            content: ''; position: absolute; left: 0; bottom: 0; width: 100%; height: 4px;
+            background: var(--corp-accent);
+        }
+
+        .kpi-card.scrap::after { background: var(--danger); }
+        .kpi-card.yield::after { background: var(--success); }
+
+        .kpi-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+        .kpi-value { font-size: 2.2rem; font-weight: 800; font-family: 'Montserrat', sans-serif; }
+
+        /* CHARTS GRID */
+        .dashboard-content {
+            padding: 0 2rem 2rem 2rem;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+        }
+
+        .chart-card {
+            background: var(--surface);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--surface-border);
+            min-height: 350px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chart-card.wide { grid-column: span 2; }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .chart-header h3 {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 700;
+        }
+
+        .canvas-container {
+            flex-grow: 1;
+            position: relative;
+            min-height: 200px;
+        }
+
+        /* TABLE SECTION */
+        .table-section {
+            grid-column: span 2;
+            background: var(--surface);
+            border-radius: 12px;
+            border: 1px solid var(--surface-border);
+            overflow: hidden;
+            margin-top: 1rem;
+        }
+
+        .table-header {
+            padding: 1rem 1.5rem;
+            background: rgba(255,255,255,0.03);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--surface-border);
+        }
+
+        .table-wrapper {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th {
+            position: sticky;
+            top: 0;
+            background: #0f172a;
+            color: var(--corp-accent);
+            text-align: left;
+            padding: 12px 16px;
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 600;
+            border-bottom: 2px solid var(--surface-border);
+        }
+
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--surface-border);
+        }
+
+        tr:hover { background: rgba(255,255,255,0.03); }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .badge-repair { background: rgba(16, 185, 129, 0.2); color: var(--success); border: 1px solid var(--success); }
+        .badge-scrap { background: rgba(244, 63, 94, 0.2); color: var(--danger); border: 1px solid var(--danger); }
+
+        /* UTILS */
+        #loader {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--corp-bg);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 10000; transition: opacity 0.3s;
+        }
+
+        .spinner {
+            width: 50px; height: 50px; border: 5px solid var(--surface); border-top: 5px solid var(--corp-accent);
+            border-radius: 50%; animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .fullscreen-btn {
+            background: var(--corp-accent);
+            border: none;
+            color: var(--corp-blue);
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 700;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .fullscreen-btn:hover { 
+            background: #ffffff; 
+            transform: translateY(-2px);
+        }
+
+        .chart-card.fullscreen, .table-section.fullscreen {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: none !important;
+            z-index: 99999 !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            background: var(--corp-bg) !important;
+            display: flex;
+            flex-direction: column;
+            padding: 20px !important;
+        }
+
+        .table-section.fullscreen .table-header {
+            flex-shrink: 0;
+            padding: 10px 20px;
+        }
+
+        .table-section.fullscreen .table-wrapper {
+            flex: 1;
+            overflow-y: auto;
+            max-height: calc(100vh - 120px);
+        }
+
+        @media (max-width: 1100px) {
+            .dashboard-content { grid-template-columns: 1fr; }
+            .chart-card.wide { grid-column: span 1; }
+            .kpi-row { grid-template-columns: 1fr 1fr; }
+            .header-info { margin-left: 0; flex-direction: column; align-items: flex-start; gap: 1rem; }
+            .navbar img { transform: none; height: 60px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loader"><div class="spinner"></div></div>
+
+    <!-- NAVBAR -->
+    <nav class="navbar">
+        <div class="nav-left">
+            <img src="wasion-ltd--600.png" alt="Wasion Logo" onerror="this.src='https://placehold.co/200x65/white/0d326b?text=WASION+LOGO'">
+        </div>
+        <div class="nav-links">
+            <a href="#" class="active">Repair Dashboard</a>
+        </div>
+    </nav>
+
+    <!-- HEADER & FILTERS -->
+    <header class="controls-panel">
+        <div class="header-info">
+            <div>
+                <h1>Repair Analytics</h1>
+                <p style="color: var(--text-muted)">QSM code: Pending</p>
+            </div>
+            <button class="btn-primary" onclick="exportToExcel()">
+                <span>📥</span> Exportar a Excel
+            </button>
+        </div>
+
+        <div class="filters-grid">
+            <div class="filter-group">
+                <label>Área</label>
+                <select id="filterArea" onchange="applyFilters()">
+                    <option value="all">Todas las Áreas</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Línea</label>
+                <select id="filterLinea" onchange="applyFilters()">
+                    <option value="all">Todas las Líneas</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Supervisor</label>
+                <select id="filterSupervisor" onchange="applyFilters()">
+                    <option value="all">Todos</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Técnico</label>
+                <select id="filterTecnico" onchange="applyFilters()">
+                    <option value="all">Todos</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Modelo</label>
+                <select id="filterModelo" onchange="applyFilters()">
+                    <option value="all">Todos los Modelos</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Fecha Inicio</label>
+                <input type="date" id="filterDateStart" onchange="applyFilters()">
+            </div>
+            <div class="filter-group">
+                <label>Fecha Fin</label>
+                <input type="date" id="filterDateEnd" onchange="applyFilters()">
+            </div>
+            <div class="filter-group">
+                <label>Movimiento</label>
+                <select id="filterMovimiento" onchange="applyFilters()">
+                    <option value="all">Todos</option>
+                    <option value="Reparación">Reparación</option>
+                    <option value="Scrap">Scrap</option>
+                </select>
+            </div>
+        </div>
+    </header>
+
+    <!-- KPIs -->
+    <section class="kpi-row">
+        <div class="kpi-card">
+            <div class="kpi-label">Total Reparaciones</div>
+            <div class="kpi-value" id="kpiRepairs">0</div>
+        </div>
+        <div class="kpi-card scrap">
+            <div class="kpi-label">Total Scrap</div>
+            <div class="kpi-value" id="kpiScrap">0</div>
+        </div>
+        <div class="kpi-card yield">
+            <div class="kpi-label">Yield Rate</div>
+            <div class="kpi-value" id="kpiYield">0%</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Defecto Principal</div>
+            <div class="kpi-value" id="kpiTopDefect" style="font-size: 1.2rem; height: 2.2rem; display: flex; align-items: center;">-</div>
+        </div>
+    </section>
+
+    <!-- DASHBOARD CONTENT -->
+    <main class="dashboard-content">
+        
+        <!-- CHART 1: TENDENCIA TEMPORAL -->
+        <div class="chart-card wide" id="card-chartTrend">
+            <div class="chart-header">
+                <h3>Tendencia Temporal: Reparación vs Scrap</h3>
+                <button class="fullscreen-btn" onclick="toggleFullscreen('card-chartTrend', 'chartTrend')">⛶</button>
+            </div>
+            <div class="canvas-container">
+                <canvas id="chartTrend"></canvas>
+            </div>
+        </div>
+
+        <!-- CHART 2: PARETO DEFECTOS -->
+        <div class="chart-card" id="card-chartPareto">
+            <div class="chart-header">
+                <h3>Análisis de Pareto: Defectos</h3>
+                <button class="fullscreen-btn" onclick="toggleFullscreen('card-chartPareto', 'chartPareto')">⛶</button>
+            </div>
+            <div class="canvas-container">
+                <canvas id="chartPareto"></canvas>
+            </div>
+        </div>
+
+        <!-- CHART 3: PIE DEFECT DIST -->
+        <div class="chart-card" id="card-chartPie">
+            <div class="chart-header">
+                <h3>Distribución de Registros (Reparación/Scrap)</h3>
+                <button class="fullscreen-btn" onclick="toggleFullscreen('card-chartPie', 'chartPie')">⛶</button>
+            </div>
+            <div class="canvas-container">
+                <canvas id="chartPie"></canvas>
+            </div>
+        </div>
+
+        <!-- CHART 4: TURNOS / HORAS -->
+        <div class="chart-card" id="card-chartShift">
+            <div class="chart-header">
+                <h3>Distribución por Turno</h3>
+                <button class="fullscreen-btn" onclick="toggleFullscreen('card-chartShift', 'chartShift')">⛶</button>
+            </div>
+            <div class="canvas-container">
+                <canvas id="chartShift"></canvas>
+            </div>
+        </div>
+
+        <!-- CHART 5: TOP MODELOS -->
+        <div class="chart-card" id="card-chartModels">
+            <div class="chart-header">
+                <h3>Top 5 Modelos con Más Incidencias</h3>
+                <button class="fullscreen-btn" onclick="toggleFullscreen('card-chartModels', 'chartModels')">⛶</button>
+            </div>
+            <div class="canvas-container">
+                <canvas id="chartModels"></canvas>
+            </div>
+        </div>
+
+        <!-- CHART 6: TOP UBICACIONES -->
+        <div class="chart-card wide" id="card-chartLocations">
+            <div class="chart-header">
+                <h3>Frecuencia por Ubicación de Componente</h3>
+                <button class="fullscreen-btn" onclick="toggleFullscreen('card-chartLocations', 'chartLocations')">⛶</button>
+            </div>
+            <div class="canvas-container">
+                <canvas id="chartLocations"></canvas>
+            </div>
+        </div>
+
+        <!-- RAW DATA TABLE -->
+        <div class="table-section" id="card-tableSection">
+            <div class="table-header">
+                <h3>Desglose de Registros</h3>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span id="rowCount" style="font-size: 0.8rem; color: var(--text-muted)">Mostrando 0 registros</span>
+                    <button class="fullscreen-btn" onclick="toggleFullscreen('card-tableSection')">⛶</button>
+                </div>
+            </div>
+            <div class="table-wrapper">
+                <table id="dataTable">
+                    <thead>
+                        <tr>
+                            <th>Fecha/Hora</th>
+                            <th>Tipo</th>
+                            <th>Modelo</th>
+                            <th>Área/Línea</th>
+                            <th>Defecto</th>
+                            <th>Ubicación</th>
+                            <th>Modo</th>
+                            <th>Supervisor</th>
+                            <th>Técnico</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Data rows injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // SUPABASE CONFIG (Copied from index.html)
+        const supabaseUrl = 'https://cutwdloeqvaxmibpfkxi.supabase.co';
+        const supabaseKey = 'sb_publishable_Vp6ltErzbG7U8_KrnDbybg_HKkY3_qE';
+        const sbClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        let allData = [];
+        let filteredData = [];
+        let charts = {};
+        let areasMap = {};
+        let lineasMap = {};
+        let defectosMap = {};
+        let usuariosMap = {};
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            await Promise.all([
+                loadLookupTables(),
+                loadFilterOptions(),
+                fetchData()
+            ]);
+            hideLoader();
+        });
+
+        async function loadLookupTables() {
+            try {
+                const [areasRes, lineasRes, defectosRes, usuariosRes] = await Promise.all([
+                    sbClient.from('areas').select('id, nombre'),
+                    sbClient.from('lineas').select('id, numero'),
+                    sbClient.from('defectos').select('id, descripcion'),
+                    sbClient.from('usuarios').select('id, nombre_completo')
+                ]);
+                if (areasRes.data) areasRes.data.forEach(a => areasMap[a.id] = a.nombre);
+                if (lineasRes.data) lineasRes.data.forEach(l => lineasMap[l.id] = l.numero);
+                if (defectosRes.data) defectosRes.data.forEach(d => defectosMap[d.id] = d.descripcion);
+                if (usuariosRes.data) usuariosRes.data.forEach(u => usuariosMap[u.id] = u.nombre_completo);
+            } catch(e) { console.error("Error loading lookup tables:", e); }
+        }
+
+        function hideLoader() {
+            const loader = document.getElementById('loader');
+            loader.style.opacity = '0';
+            setTimeout(() => loader.style.display = 'none', 300);
+        }
+
+        async function loadFilterOptions() {
+            try {
+                const [areasRes, lineasRes, supervisoresRes, modelosRes] = await Promise.all([
+                    sbClient.from('areas').select('id, nombre'),
+                    sbClient.from('lineas').select('id, numero'),
+                    sbClient.from('supervisores').select('id, nombre'),
+                    sbClient.from('modelos').select('id, codigo')
+                ]);
+
+                const selectArea = document.getElementById('filterArea');
+                const selectLinea = document.getElementById('filterLinea');
+                const selectSupervisor = document.getElementById('filterSupervisor');
+                const selectModelo = document.getElementById('filterModelo');
+                
+                selectArea.innerHTML = '<option value="all">Todas las Áreas</option>';
+                if (areasRes.data) {
+                    areasRes.data.forEach(a => {
+                        const opt = document.createElement('option');
+                        opt.value = a.id;
+                        opt.textContent = a.nombre;
+                        selectArea.appendChild(opt);
+                    });
+                }
+
+                selectLinea.innerHTML = '<option value="all">Todas las Líneas</option>';
+                if (lineasRes.data) {
+                    lineasRes.data.forEach(l => {
+                        const opt = document.createElement('option');
+                        opt.value = l.id;
+                        opt.textContent = 'Línea ' + l.numero;
+                        selectLinea.appendChild(opt);
+                    });
+                }
+
+                selectSupervisor.innerHTML = '<option value="all">Todos</option>';
+                if (supervisoresRes.data) {
+                    supervisoresRes.data.forEach(s => {
+                        const opt = document.createElement('option');
+                        opt.value = s.nombre;
+                        opt.textContent = s.nombre;
+                        selectSupervisor.appendChild(opt);
+                    });
+                }
+
+                selectModelo.innerHTML = '<option value="all">Todos los Modelos</option>';
+                if (modelosRes.data) {
+                    modelosRes.data.forEach(m => {
+                        const opt = document.createElement('option');
+                        opt.value = m.codigo;
+                        opt.textContent = m.codigo;
+                        selectModelo.appendChild(opt);
+                    });
+                }
+
+                // Técnico filter - load from usuarios table
+                const { data: usuariosData } = await sbClient.from('usuarios').select('id, nombre_completo');
+                const selectTecnico = document.getElementById('filterTecnico');
+                selectTecnico.innerHTML = '<option value="all">Todos</option>';
+                if (usuariosData) {
+                    usuariosData.forEach(u => {
+                        const opt = document.createElement('option');
+                        opt.value = u.id;
+                        opt.textContent = u.nombre_completo;
+                        selectTecnico.appendChild(opt);
+                    });
+                }
+            } catch (error) {
+                console.error("Error loading filters:", error);
+                hideLoader();
+            }
+        }
+
+        function populateSelectFromArray(id, arr) {
+            const select = document.getElementById(id);
+            if (!arr || arr.length === 0) return;
+            select.innerHTML = '<option value="all">Todos</option>';
+            arr.forEach(val => {
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.textContent = val;
+                select.appendChild(opt);
+            });
+        }
+
+        function populateSelect(id, data, valKey, textKey, prefix = '') {
+            const select = document.getElementById(id);
+            if (!data) return;
+            data.forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item[valKey];
+                opt.textContent = prefix + item[textKey];
+                select.appendChild(opt);
+            });
+        }
+
+        async function fetchData() {
+            try {
+                const { data, error } = await sbClient
+                    .from('reparaciones')
+                    .select('*')
+                    .order('fecha', { ascending: false });
+
+                if (error) throw error;
+                allData = data || [];
+                applyFilters();
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                hideLoader();
+            }
+        }
+
+        function applyFilters() {
+            const area = document.getElementById('filterArea').value;
+            const linea = document.getElementById('filterLinea').value;
+            const supervisor = document.getElementById('filterSupervisor').value;
+            const tecnico = document.getElementById('filterTecnico').value;
+            const modelo = document.getElementById('filterModelo').value;
+            const dateStart = document.getElementById('filterDateStart').value;
+            const dateEnd = document.getElementById('filterDateEnd').value;
+            const movimiento = document.getElementById('filterMovimiento').value;
+
+            filteredData = allData.filter(item => {
+                const matchesArea = area === 'all' || item.area_id.toString() === area;
+                const matchesLinea = linea === 'all' || item.linea_id.toString() === linea;
+                const matchesSupervisor = supervisor === 'all' || item.supervisor === supervisor;
+                const matchesTecnico = tecnico === 'all' || item.quien_repara_id?.toString() === tecnico;
+                const matchesModelo = modelo === 'all' || item.modelo === modelo;
+                const matchesMovimiento = movimiento === 'all' || item.movimiento_tipo === movimiento;
+                
+                const itemDate = item.fecha; // yyyy-mm-dd
+                const matchesStart = !dateStart || itemDate >= dateStart;
+                const matchesEnd = !dateEnd || itemDate <= dateEnd;
+
+                return matchesArea && matchesLinea && matchesSupervisor && matchesTecnico && matchesModelo && matchesMovimiento && matchesStart && matchesEnd;
+            });
+
+            updateDashboard();
+        }
+
+        function updateDashboard() {
+            updateKPIs();
+            renderTable();
+            renderCharts();
+        }
+
+        function updateKPIs() {
+            const total = filteredData.length;
+            const repairs = filteredData.filter(d => d.movimiento_tipo === 'Reparación').length;
+            const scrap = filteredData.filter(d => d.movimiento_tipo === 'Scrap').length;
+            const yieldRate = total > 0 ? ((repairs / total) * 100).toFixed(1) : 0;
+
+            document.getElementById('kpiRepairs').textContent = repairs;
+            document.getElementById('kpiScrap').textContent = scrap;
+            document.getElementById('kpiYield').textContent = yieldRate + '%';
+
+            const defects = {};
+            filteredData.forEach(d => {
+                const desc = defectosMap[d.defecto_id] || d.defecto_id || 'N/A';
+                defects[desc] = (defects[desc] || 0) + 1;
+            });
+            const topDefect = Object.entries(defects).sort((a,b) => b[1] - a[1])[0];
+            document.getElementById('kpiTopDefect').textContent = topDefect ? topDefect[0] : '-';
+        }
+
+        function renderTable() {
+            const tbody = document.querySelector('#dataTable tbody');
+            document.getElementById('rowCount').textContent = `Mostrando ${filteredData.length} registros`;
+            tbody.innerHTML = '';
+            
+            filteredData.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${item.fecha} <br> <small>${item.hora}</small></td>
+                    <td>${item.tipo_registro}</td>
+                    <td style="font-weight:700">${item.modelo || '-'}</td>
+                    <td>${areasMap[item.area_id] || item.area_id || '-'}<br><small>Línea ${lineasMap[item.linea_id] || item.linea_id || '-'}</small></td>
+                    <td>${defectosMap[item.defecto_id] || item.defecto_id || '-'}</td>
+                    <td>${item.ubicacion || '-'}</td>
+                    <td><span class="badge ${item.movimiento_tipo === 'Scrap' ? 'badge-scrap' : 'badge-repair'}">${item.movimiento_tipo}</span></td>
+                    <td>${item.supervisor || '-'}</td>
+                    <td>${usuariosMap[item.quien_repara_id] || '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function renderCharts() {
+            // Destroy existing charts to redraw
+            Object.values(charts).forEach(c => c.destroy());
+
+            renderTrendChart();
+            renderParetoChart();
+            renderPieChart();
+            renderShiftChart();
+            renderModelsChart();
+            renderLocationsChart();
+        }
+
+        function renderTrendChart() {
+            const ctx = document.getElementById('chartTrend').getContext('2d');
+            const dates = {};
+            
+            filteredData.forEach(d => {
+                if (!dates[d.fecha]) dates[d.fecha] = { repairs: 0, scrap: 0 };
+                if (d.movimiento_tipo === 'Scrap') dates[d.fecha].scrap++;
+                else dates[d.fecha].repairs++;
+            });
+
+            const sortedDates = Object.keys(dates).sort();
+            
+            charts.trend = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: sortedDates,
+                    datasets: [
+                        {
+                            label: 'Reparaciones',
+                            data: sortedDates.map(d => dates[d].repairs),
+                            borderColor: '#10b981',
+                            tension: 0.3,
+                            fill: false
+                        },
+                        {
+                            label: 'Scrap',
+                            data: sortedDates.map(d => dates[d].scrap),
+                            borderColor: '#f43f5e',
+                            tension: 0.3,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        x: { grid: { display : false } }
+                    },
+                    plugins: { 
+                        legend: { labels: { color: '#fff' } },
+                        zoom: {
+                            pan: { enabled: true, mode: 'xy' },
+                            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderParetoChart() {
+            const ctx = document.getElementById('chartPareto').getContext('2d');
+            const counts = {};
+            filteredData.forEach(d => {
+                const key = defectosMap[d.defecto_id] || d.defecto_id || 'N/A';
+                counts[key] = (counts[key] || 0) + 1;
+            });
+
+            const sorted = Object.entries(counts).sort((a,b) => b[1] - a[1]);
+            const labels = sorted.map(s => s[0]);
+            const data = sorted.map(s => s[1]);
+            
+            const total = data.reduce((a,b) => a+b, 0);
+            let cumulative = 0;
+            const paretoData = data.map(v => {
+                cumulative += v;
+                return (cumulative / total) * 100;
+            });
+
+            charts.pareto = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Frecuencia',
+                            data: data,
+                            backgroundColor: 'rgba(0, 210, 255, 0.7)',
+                            order: 2
+                        },
+                        {
+                            label: '% Acumulado',
+                            data: paretoData,
+                            type: 'line',
+                            borderColor: '#fbbf24',
+                            borderWidth: 3,
+                            yAxisID: 'y1',
+                            order: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y1: { 
+                            position: 'right', 
+                            max: 100, 
+                            beginAtZero: true,
+                            grid: { display: false }
+                        }
+                    },
+                    plugins: { 
+                        legend: { labels: { color: '#fff' } },
+                        zoom: {
+                            pan: { enabled: true, mode: 'xy' },
+                            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderPieChart() {
+            const ctx = document.getElementById('chartPie').getContext('2d');
+            const repairs = filteredData.filter(d => d.movimiento_tipo === 'Reparación').length;
+            const scrap = filteredData.filter(d => d.movimiento_tipo === 'Scrap').length;
+
+            charts.pie = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Reparaciones', 'Scrap'],
+                    datasets: [{
+                        data: [repairs, scrap],
+                        backgroundColor: ['#10b981', '#f43f5e'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { position: 'bottom', labels: { color: '#fff' } }
+                    }
+                }
+            });
+        }
+
+        function renderShiftChart() {
+            const ctx = document.getElementById('chartShift').getContext('2d');
+            const shifts = { 1: 0, 2: 0, 3: 0 };
+            filteredData.forEach(d => {
+                if (d.turno) shifts[d.turno]++;
+            });
+
+            charts.shift = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Turno 1', 'Turno 2', 'Turno 3'],
+                    datasets: [{
+                        label: 'Incidencias',
+                        data: [shifts[1], shifts[2], shifts[3]],
+                        backgroundColor: '#818cf8'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    },
+                    plugins: { 
+                        legend: { display: false },
+                        zoom: {
+                            pan: { enabled: true, mode: 'xy' },
+                            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderModelsChart() {
+            const ctx = document.getElementById('chartModels').getContext('2d');
+            const models = {};
+            filteredData.forEach(d => {
+                if (d.modelo) models[d.modelo] = (models[d.modelo] || 0) + 1;
+            });
+
+            const top5 = Object.entries(models).sort((a,b) => b[1] - a[1]).slice(0, 5);
+
+            charts.models = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: top5.map(t => t[0]),
+                    datasets: [{
+                        label: 'Total Incidencias',
+                        data: top5.map(t => t[1]),
+                        backgroundColor: 'rgba(0, 210, 255, 0.5)',
+                        indexAxis: 'y'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    },
+                    plugins: { 
+                        legend: { display: false },
+                        zoom: {
+                            pan: { enabled: true, mode: 'xy' },
+                            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderLocationsChart() {
+            const ctx = document.getElementById('chartLocations').getContext('2d');
+            const locs = {};
+            filteredData.forEach(d => {
+                if (d.ubicacion) {
+                    const u = d.ubicacion.toUpperCase();
+                    locs[u] = (locs[u] || 0) + 1;
+                }
+            });
+
+            const top10 = Object.entries(locs).sort((a,b) => b[1] - a[1]).slice(0, 10);
+
+            charts.locations = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: top10.map(t => t[0]),
+                    datasets: [{
+                        label: 'Frecuencia de Ubicación',
+                        data: top10.map(t => t[1]),
+                        backgroundColor: '#fbbf24',
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { display: false },
+                        zoom: {
+                            pan: { enabled: true, mode: 'xy' },
+                            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' }
+                        }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    }
+                }
+            });
+        }
+
+        function exportToExcel() {
+            if (filteredData.length === 0) {
+                alert("No hay datos para exportar.");
+                return;
+            }
+
+            const dataToExport = filteredData.map(item => ({
+                'Fecha': item.fecha,
+                'Hora': item.hora,
+                'Tipo': item.tipo_registro,
+                'QR/Serial': item.qr,
+                'Modelo': item.modelo || '',
+                'Área': areasMap[item.area_id] || item.area_id || '',
+                'Línea': lineasMap[item.linea_id] || item.linea_id || '',
+                'Defecto': defectosMap[item.defecto_id] || item.defecto_id || '',
+                'Ubicación': item.ubicacion || '',
+                'Modo': item.movimiento_tipo,
+                'Supervisor': item.supervisor || '',
+                'Técnico': usuariosMap[item.quien_repara_id] || '',
+                'Turno': item.turno || ''
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(dataToExport);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Reparaciones");
+            XLSX.writeFile(wb, `Wasion_Repair_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+        }
+
+        function toggleFullscreen(cardId, chartId) {
+            const card = document.getElementById(cardId);
+            const wasFullscreen = card.classList.contains('fullscreen');
+            card.classList.toggle('fullscreen');
+            
+            if (cardId === 'card-tableSection') {
+                renderTable();
+            } else if (chartId) {
+                if (wasFullscreen) {
+                    Object.keys(charts).forEach(key => {
+                        if (charts[key]) {
+                            charts[key].resetZoom();
+                            charts[key].destroy();
+                        }
+                    });
+                    charts = {};
+                    renderCharts();
+                } else {
+                    if (charts[chartId]) charts[chartId].resize();
+                }
+            }
+        }
+
+    </script>
+</body>
+</html>

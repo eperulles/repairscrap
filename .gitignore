@@ -1,0 +1,14 @@
+venv/
+build/
+dist/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+*.log
+crash_log.txt
+logs*.txt
+final_verif*.txt
+config/__pycache__/
+config/*.pyc
