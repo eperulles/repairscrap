@@ -37,6 +37,14 @@ def get_defectos(area_id: int = None) -> list:
     response = query.execute()
     return response.data
 
+def get_tipos_reparacion(area_id: int = None) -> list:
+    client = get_client()
+    query = client.table("tipos_reparacion").select("*").eq("activo", True)
+    if area_id:
+        query = query.eq("area_id", area_id)
+    response = query.execute()
+    return response.data
+
 def get_usuarios() -> list:
     client = get_client()
     response = client.table("usuarios").select("id, nombre_completo").eq("activo", True).execute()

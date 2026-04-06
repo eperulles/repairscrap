@@ -14,7 +14,7 @@ import threading
 
 from modules.common.database import (
     get_areas, get_lineas, get_defectos, get_modelos,
-    get_supervisores, insert_reparacion
+    get_supervisores, get_tipos_reparacion, insert_reparacion
 )
 
 class PCBAScreen(MDScreen):
@@ -25,11 +25,13 @@ class PCBAScreen(MDScreen):
         self.defectos_cache = []
         self.modelos_cache = []
         self.supervisores_cache = []
+        self.tipos_reparacion_cache = []
         self.selected_area_id = None
         self.selected_linea_id = None
         self.selected_defecto_id = None
         self.selected_modelo_id = None
         self.selected_supervisor_id = None
+        self.selected_reparacion_id = None
         self.active_menu = None
         self.wasion_blue = get_color_from_hex("#183883")
         self.setup_ui()
@@ -100,7 +102,8 @@ class PCBAScreen(MDScreen):
         
         self.defecto_field = self.create_selectable_field("Tipo de Defecto", "alert", fill)
         self.defecto_field.bind(focus=lambda i, v: self.on_select_focus(i, v, self.defectos_cache, "descripcion", lambda x: setattr(self, 'selected_defecto_id', x['id']), w=4))
-        self.reparacion_field = self.create_field("Reparación Realizada", "tools", fill)
+        self.reparacion_field = self.create_selectable_field("Reparación Realizada", "tools", fill)
+        self.reparacion_field.bind(focus=lambda i, v: self.on_select_focus(i, v, self.tipos_reparacion_cache, "descripcion", lambda x: setattr(self, 'selected_reparacion_id', x['id']), w=4))
         self.ubicacion_field = self.create_field("Ubicación", "map-marker", fill)
         form_card.add_widget(self.defecto_field); form_card.add_widget(self.reparacion_field); form_card.add_widget(self.ubicacion_field)
         
@@ -130,7 +133,7 @@ class PCBAScreen(MDScreen):
     def load_data(self):
         def t():
             try:
-                self.areas_cache = get_areas(); self.lineas_cache = get_lineas(); self.defectos_cache = get_defectos(); self.modelos_cache = get_modelos(); self.supervisores_cache = get_supervisores()
+                self.areas_cache = get_areas(); self.lineas_cache = get_lineas(); self.defectos_cache = get_defectos(); self.modelos_cache = get_modelos(); self.supervisores_cache = get_supervisores(); self.tipos_reparacion_cache = get_tipos_reparacion()
             except: pass
         threading.Thread(target=t).start()
     def submit_form(self, *a):
@@ -143,18 +146,18 @@ class PCBAScreen(MDScreen):
         else: turno = 3
 
         data = {
-            "tipo_registro": "PCBA", 
-            "qr": qr, 
-            "modelo": self.modelo_field.text or None, 
-            "fecha": now.strftime("%Y-%m-%d"), 
-            "hora": now.strftime("%H:%M:%S"), 
+            "tipo_registro": "PCBA",
+            "qr": qr,
+            "modelo": self.modelo_field.text or None,
+            "fecha": now.strftime("%Y-%m-%d"),
+            "hora": now.strftime("%H:%M:%S"),
             "turno": turno,
-            "area_id": self.selected_area_id, 
-            "linea_id": self.selected_linea_id, 
-            "defecto_id": self.selected_defecto_id, 
-            "reparacion": self.reparacion_field.text.strip() or None, 
-            "ubicacion": self.ubicacion_field.text.strip() or None, 
-            "supervisor": self.supervisor_field.text or None, 
+            "area_id": self.selected_area_id,
+            "linea_id": self.selected_linea_id,
+            "defecto_id": self.selected_defecto_id,
+            "reparacion_id": self.selected_reparacion_id,
+            "ubicacion": self.ubicacion_field.text.strip() or None,
+            "supervisor": self.supervisor_field.text or None,
             "quien_repara_id": u_id,
             "movimiento_tipo": app.movimiento_tipo
         }
@@ -165,3 +168,4 @@ class PCBAScreen(MDScreen):
         self.status_label.text = "Guardado!" if r else "Error"; self.submit_btn.disabled = False
         if r:
             for f in [self.qr_field, self.modelo_field, self.area_field, self.linea_field, self.supervisor_field, self.defecto_field, self.reparacion_field, self.ubicacion_field]: f.text = ""
+            self.selected_area_id = self.selected_linea_id = self.selected_defecto_id = self.selected_modelo_id = self.selected_supervisor_id = self.selected_reparacion_id = None

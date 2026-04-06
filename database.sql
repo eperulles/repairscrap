@@ -37,6 +37,15 @@ CREATE TABLE IF NOT EXISTS defectos (
     activo BOOLEAN DEFAULT TRUE
 );
 
+-- 4b. TABLA DE TIPOS DE REPARACIÓN
+CREATE TABLE IF NOT EXISTS tipos_reparacion (
+    id SERIAL PRIMARY KEY,
+    codigo VARCHAR(50) UNIQUE NOT NULL,
+    descripcion VARCHAR(255) NOT NULL,
+    area_id INTEGER REFERENCES areas(id),
+    activo BOOLEAN DEFAULT TRUE
+);
+
 -- 5. TABLA DE MODELOS
 CREATE TABLE IF NOT EXISTS modelos (
     id SERIAL PRIMARY KEY,
@@ -65,7 +74,7 @@ CREATE TABLE IF NOT EXISTS reparaciones (
     area_id INTEGER REFERENCES areas(id),
     linea_id INTEGER REFERENCES lineas(id),
     defecto_id INTEGER REFERENCES defectos(id),
-    reparacion VARCHAR(255),
+    reparacion_id INTEGER REFERENCES tipos_reparacion(id),
     ubicacion VARCHAR(100),
     supervisor VARCHAR(200),
     quien_repara_id INTEGER REFERENCES usuarios(id),
@@ -89,6 +98,17 @@ INSERT INTO lineas (numero, area_id) VALUES
 (1, 1), (2, 1), (3, 1), (4, 1),
 (5, 2), (6, 2),
 (7, 3), (8, 3);
+
+-- TIPOS DE REPARACIÓN (ejemplo - agregar los tuyos)
+INSERT INTO tipos_reparacion (codigo, descripcion, area_id) VALUES
+('REP001', 'Cambio de componente', 1),
+('REP002', 'Resoldadura', 1),
+('REP003', 'Limpieza de pad', 1),
+('REP004', 'Reemplazo de módulo', 2),
+('REP005', 'Ajuste de pin', 2),
+('REP006', 'Calibración manual', 4),
+('REP007', 'Reset de firmware', NULL),
+('REP008', 'Inspección visual', NULL);
 
 -- DEFECTOS COMUNES (ejemplo - agregar los tuyos)
 INSERT INTO defectos (codigo, descripcion, area_id) VALUES
@@ -157,6 +177,11 @@ CREATE POLICY "Todos pueden ver líneas" ON lineas
 
 -- Políticas para defectos
 CREATE POLICY "Todos pueden ver defectos" ON defectos
+    FOR SELECT USING (true);
+
+-- Políticas para tipos de reparación
+ALTER TABLE tipos_reparacion ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Todos pueden ver tipos de reparacion" ON tipos_reparacion
     FOR SELECT USING (true);
 
 -- Políticas para modelos
