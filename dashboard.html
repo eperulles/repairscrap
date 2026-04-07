@@ -1379,56 +1379,69 @@
                 camera.updateProjectionMatrix();
 
                 // --- Place component markers ---
-                // CSV coords are KiCad absolute mm (origin = board lower-left corner).
-                // The GLB bounding box tells us the real board dimensions in world units.
-                // KiCad Y increases downward → flip to match Three.js Y-up convention.
-                const boardMmW = boardFaceW * 1000; // e.g. 132.5 mm
-                const boardMmD = boardFaceD * 1000; // e.g. 110.9 mm
+                // Altium P&P: origin = board lower-left, Y increases upward (same as Three.js).
+                // Board is exactly 132.5 x 110.9 mm per Board Information report.
+                const boardMmW = boardFaceW * 1000; // world → mm (e.g. 132.5)
+                const boardMmD = boardFaceD * 1000; // world → mm (e.g. 110.9)
 
-                const markerSize = maxDim * 0.006;
-                const markerH    = maxDim * 0.004;
+                // Minimum marker height so it's always visible
+                const minH = maxDim * 0.003;
 
                 components.forEach(comp => {
                     const count = heatmap[comp.d.toUpperCase()] || 0;
                     const color = heatColor(count);
 
-                    // Normalize: board goes from 0→boardMmW in X and 0→boardMmD in Y.
-                    // Flip Y because KiCad Y↓ vs Three.js Y↑.
-                    const nx =  (comp.x / boardMmW) - 0.5;
-                    const ny = -((comp.y / boardMmD) - 0.5); // flip
+                    // Altium Y is already upward → no flip needed
+                    const nx = (comp.x / boardMmW) - 0.5;
+                    const ny = (comp.y / boardMmD) - 0.5;
 
-                    let wx, wy, wz, geoArgs;
-                    const topOffset  = halfThick + markerH * 0.5;
-                    const botOffset  = -(halfThick + markerH * 0.5);
+                    // Real footprint size in world units (sx/sy are in mm from JSON)
+                    const mw = ((comp.sx || 1.6) / 1000) * 0.85; // world width
+                    const md = ((comp.sy || 0.8) / 1000) * 0.85; // world depth
+                    const mh = Math.max(minH, maxDim * 0.002);   // marker height
+
+                    let wx, wy, wz, geo;
+                    const layerKey = comp.lay || comp.layer || 'T';
+                    const topOffset = halfThick + mh * 0.5;
+                    const botOffset = -(halfThick + mh * 0.5);
 
                     if (boardThickAxis === 'y') {
                         wx = nx * boardFaceW;
                         wz = ny * boardFaceD;
-                        wy = comp.layer === 'T' ? topOffset : botOffset;
-                        geoArgs = [markerSize, markerH, markerSize];
+                        wy = layerKey === 'T' ? topOffset : botOffset;
+                        geo = new THREE.BoxGeometry(mw, mh, md);
                     } else if (boardThickAxis === 'z') {
                         wx = nx * boardFaceW;
                         wy = ny * boardFaceD;
-                        wz = comp.layer === 'T' ? topOffset : botOffset;
-                        geoArgs = [markerSize, markerSize, markerH];
+                        wz = layerKey === 'T' ? topOffset : botOffset;
+                        geo = new THREE.BoxGeometry(mw, md, mh);
                     } else {
                         wy = nx * boardFaceW;
                         wz = ny * boardFaceD;
-                        wx = comp.layer === 'T' ? topOffset : botOffset;
-                        geoArgs = [markerH, markerSize, markerSize];
+                        wx = layerKey === 'T' ? topOffset : botOffset;
+                        geo = new THREE.BoxGeometry(mh, mw, md);
                     }
 
-                    const geo = new THREE.BoxGeometry(...geoArgs);
                     const mat = new THREE.MeshStandardMaterial({
                         color,
                         emissive: color,
-                        emissiveIntensity: count > 0 ? 0.7 : 0.2,
+                        emissiveIntensity: count > 0 ? 0.8 : 0.25,
                         roughness: 0.3,
                         metalness: 0.2
                     });
                     const mesh = new THREE.Mesh(geo, mat);
                     mesh.position.set(wx, wy, wz);
-                    mesh.userData = { designator: comp.d, comment: comp.cmt, footprint: comp.fp, count, layer: comp.layer };
+
+                    // Apply Altium rotation around the board-normal axis
+                    const rotRad = ((comp.r || 0) * Math.PI) / 180;
+                    if (boardThickAxis === 'y') mesh.rotation.y = -rotRad;
+                    else if (boardThickAxis === 'z') mesh.rotation.z = -rotRad;
+                    else mesh.rotation.x = -rotRad;
+
+                    mesh.userData = {
+                        designator: comp.d, comment: comp.cmt,
+                        footprint: comp.fp, count, layer: layerKey
+                    };
                     scene.add(mesh);
                 });
 
