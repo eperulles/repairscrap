@@ -1362,6 +1362,13 @@
             loader.setDRACOLoader(draco);
             loader.load('assets/pcba_board.glb', (gltf) => {
                 const model = gltf.scene;
+
+                // GLB is in metres (SolidWorks export). Scale ×1000 so the scene
+                // works in millimetres — avoids OrbitControls float-precision issues
+                // that cause "only two zoom states" at sub-0.2 m scale.
+                model.scale.setScalar(1000);
+
+                // Compute bbox AFTER scaling so all derived dims are in mm
                 boardBox.setFromObject(model);
                 boardBox.getCenter(boardCenter);
                 boardBox.getSize(boardSize);
@@ -1395,11 +1402,12 @@
                 window._pcbDebug = { boardSize: {x: boardSize.x, y: boardSize.y, z: boardSize.z}, boardThickAxis, maxDim };
 
                 // Camera: nearly perpendicular to board face (like PCBdoc top-down view)
-                camera.near = maxDim * 0.001;
-                camera.far  = maxDim * 100;
+                // Scene is in mm — use comfortable near/far values
+                camera.near = 0.5;       // 0.5 mm
+                camera.far  = 50000;     // 50 m equivalent
 
-                // Component cluster center is ~5.22 mm above board center in world Y
-                const clusterOffsetY = boardFaceD * (5.22 / 110.9);   // ~0.00522 m
+                // Component cluster center is ~5.22 mm above board centre in world Y
+                const clusterOffsetY = boardFaceD * (5.22 / 110.9);   // mm (≈5.22)
 
                 if (boardThickAxis === 'y') {
                     camera.position.set(0, maxDim * 1.6, maxDim * 0.05);
@@ -1417,13 +1425,12 @@
                 camera.updateProjectionMatrix();
 
                 // --- Place component markers ---
-                // Altium P&P: origin = board lower-left, Y increases upward (same as Three.js).
-                // Board is exactly 132.5 x 110.9 mm per Board Information report.
-                const boardMmW = boardFaceW * 1000; // world → mm (e.g. 132.5)
-                const boardMmD = boardFaceD * 1000; // world → mm (e.g. 110.9)
+                // Scene is now in mm, so boardFaceW/D are already in mm (≈132.5 / 110.9)
+                const boardMmW = boardFaceW;
+                const boardMmD = boardFaceD;
 
-                // Minimum marker height so it's always visible
-                const minH = maxDim * 0.003;
+                // Minimum marker height so it's always visible (≥1 mm)
+                const minH = Math.max(maxDim * 0.008, 1.0);
 
                 components.forEach(comp => {
                     // Skip test points (T-prefixed designators) – not useful for repair tracking
@@ -1440,10 +1447,10 @@
                     const nx = (comp.x / boardMmW) - 0.5;
                     const ny = ((comp.y - yOffset) / boardMmD) - 0.5;
 
-                    // Real footprint size in world units (sx/sy are in mm from JSON)
-                    const mw = ((comp.sx || 1.6) / 1000) * 0.85; // world width
-                    const md = ((comp.sy || 0.8) / 1000) * 0.85; // world depth
-                    const mh = Math.max(minH, maxDim * 0.002);   // marker height
+                    // Footprint size: comp.sx/sy are in mm, scene is now in mm — use directly
+                    const mw = (comp.sx || 1.6) * 0.85; // mm width
+                    const md = (comp.sy || 0.8) * 0.85; // mm depth
+                    const mh = Math.max(minH, maxDim * 0.008); // mm height
 
                     let wx, wy, wz, geo;
                     const layerKey = comp.lay || comp.layer || 'T';
