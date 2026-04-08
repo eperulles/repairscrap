@@ -1435,7 +1435,7 @@
                     // Apply downward offset: the Altium board origin is above
                     // the Pick & Place coordinate (0,0), so without this offset some
                     // components near the top edge overflow the board outline.
-                    const yOffset = 8.5; // mm
+                    const yOffset = 6.75; // mm
                     const nx = (comp.x / boardMmW) - 0.5;
                     const ny = ((comp.y - yOffset) / boardMmD) - 0.5;
 
