@@ -354,7 +354,7 @@
             transform: translateY(-2px);
         }
 
-        .chart-card.fullscreen, .table-section.fullscreen {
+        .chart-card.fullscreen, .table-section.fullscreen, .pcb-card.fullscreen {
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
@@ -458,6 +458,12 @@
         .pcb-top-item { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.8rem; }
         .pcb-top-badge { background: rgba(244,63,94,0.2); color: #f43f5e; padding: 2px 7px; border-radius: 10px; font-weight: 700; font-size: 0.75rem; }
         .pcb-loading { color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 10px 0; }
+        /* PCB fullscreen: layout expands to fill remaining height */
+        .pcb-card.fullscreen .pcb-layout {
+            flex: 1;
+            height: auto !important;
+        }
+        .pcb-card.fullscreen { display: flex; flex-direction: column; }
         @media (max-width: 1100px) {
             .pcb-layout { grid-template-columns: 1fr; height: auto; }
             #pcbCanvas { height: 300px; }
@@ -634,7 +640,12 @@
         <div class="pcb-card" id="card-pcbViewer">
             <div class="pcb-card-header">
                 <h3>🔥 Mapa de Calor PCBA — Frecuencia de Reparaciones por Componente</h3>
-                <span style="font-size:0.75rem;color:var(--text-muted)">Clic en un componente para ver detalles · Arrastra para rotar · Scroll para zoom</span>
+                <div style="display:flex;align-items:center;gap:12px">
+                    <span style="font-size:0.72rem;color:var(--text-muted)">
+                        🖱 Izq: rotar &nbsp;·&nbsp; Der: mover &nbsp;·&nbsp; Scroll: zoom &nbsp;·&nbsp; Clic: detalles
+                    </span>
+                    <button class="fullscreen-btn" onclick="togglePCBFullscreen()">⛶</button>
+                </div>
             </div>
             <div class="pcb-layout">
                 <canvas id="pcbCanvas"></canvas>
@@ -1232,6 +1243,17 @@
         }
 
 
+        function togglePCBFullscreen() {
+            const card = document.getElementById('card-pcbViewer');
+            card.classList.toggle('fullscreen');
+            // Give the browser one frame to apply the CSS, then resize the renderer
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    if (window._pcbResize) window._pcbResize();
+                });
+            });
+        }
+
         // =============================================
         // PCB 3D HEATMAP VIEWER
         // =============================================
@@ -1259,8 +1281,16 @@
 
             const controls = new OrbitControls(camera, renderer.domElement);
             window._pcbControls = controls;
-            controls.enableDamping = true;
-            controls.dampingFactor = 0.08;
+            controls.enableDamping      = true;
+            controls.dampingFactor      = 0.08;
+            controls.enablePan          = true;
+            controls.screenSpacePanning = true;   // pan moves parallel to screen
+            controls.panSpeed           = 1.2;
+            controls.mouseButtons = {
+                LEFT:   THREE.MOUSE.ROTATE,
+                MIDDLE: THREE.MOUSE.DOLLY,
+                RIGHT:  THREE.MOUSE.PAN
+            };
 
             // Resize immediately — container has height:500px from CSS
             const container = canvas.parentElement;
@@ -1271,6 +1301,7 @@
                 camera.aspect = w / h;
                 camera.updateProjectionMatrix();
             }
+            window._pcbResize = resize;   // exposed for fullscreen toggle
             resize();
 
             // Lighting
@@ -1362,17 +1393,23 @@
                 const halfThick = Math.min(...dims) * 0.5;
                 window._pcbDebug = { boardSize: {x: boardSize.x, y: boardSize.y, z: boardSize.z}, boardThickAxis, maxDim };
 
-                // Camera: look at board face from above the thick axis
+                // Camera: nearly perpendicular to board face (like PCBdoc top-down view)
                 camera.near = maxDim * 0.001;
                 camera.far  = maxDim * 100;
+
+                // Component cluster center is ~5.22 mm above board center in world Y
+                const clusterOffsetY = boardFaceD * (5.22 / 110.9);   // ~0.00522 m
+
                 if (boardThickAxis === 'y') {
-                    camera.position.set(0, maxDim * 1.6, maxDim * 0.3);
+                    camera.position.set(0, maxDim * 1.6, maxDim * 0.05);
                 } else if (boardThickAxis === 'z') {
-                    camera.position.set(0, maxDim * 0.3, maxDim * 1.6);
+                    // Minimal Y tilt → near-flat view matching PCBdoc
+                    camera.position.set(0, maxDim * 0.04, maxDim * 1.6);
                 } else {
-                    camera.position.set(maxDim * 1.6, maxDim * 0.3, 0);
+                    camera.position.set(maxDim * 1.6, maxDim * 0.05, 0);
                 }
-                camera.lookAt(0, 0, 0);
+                camera.lookAt(0, clusterOffsetY, 0);
+                controls.target.set(0, clusterOffsetY, 0);
                 controls.minDistance = maxDim * 0.3;
                 controls.maxDistance = maxDim * 8;
                 controls.update();
@@ -1388,12 +1425,19 @@
                 const minH = maxDim * 0.003;
 
                 components.forEach(comp => {
+                    // Skip test points (T-prefixed designators) – not useful for repair tracking
+                    if (/^T\d/i.test(comp.d.trim())) return;
+
                     const count = heatmap[comp.d.toUpperCase()] || 0;
                     const color = heatColor(count);
 
                     // Altium Y is already upward → no flip needed
+                    // Apply downward offset: the Altium board origin is above
+                    // the Pick & Place coordinate (0,0), so without this offset some
+                    // components near the top edge overflow the board outline.
+                    const yOffset = 5.0; // mm
                     const nx = (comp.x / boardMmW) - 0.5;
-                    const ny = (comp.y / boardMmD) - 0.5;
+                    const ny = ((comp.y - yOffset) / boardMmD) - 0.5;
 
                     // Real footprint size in world units (sx/sy are in mm from JSON)
                     const mw = ((comp.sx || 1.6) / 1000) * 0.85; // world width
