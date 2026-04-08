@@ -646,6 +646,7 @@
                     </span>
                     <button class="fullscreen-btn" onclick="pcbZoom(-1)" title="Acercar">＋</button>
                     <button class="fullscreen-btn" onclick="pcbZoom(+1)" title="Alejar">－</button>
+                    <button class="fullscreen-btn" onclick="pcbResetView()" title="Vista superior">⊙</button>
                     <button class="fullscreen-btn" onclick="togglePCBFullscreen()">⛶</button>
                 </div>
             </div>
@@ -1255,6 +1256,18 @@
             });
         }
 
+        // Reset camera to default top-down view
+        function pcbResetView() {
+            const cam = window._pcbCamera;
+            const ctrl = window._pcbControls;
+            const def = window._pcbDefaultView;
+            if (!cam || !ctrl || !def) return;
+            cam.position.copy(def.position);
+            cam.lookAt(def.target);
+            ctrl.target.copy(def.target);
+            ctrl.update();
+        }
+
         // Zoom the PCB camera by a fixed 15% step.
         // direction: -1 = zoom in (closer), +1 = zoom out (further)
         function pcbZoom(direction) {
@@ -1454,6 +1467,12 @@
                 controls.maxDistance = maxDim * 12;
                 controls.update();
                 camera.updateProjectionMatrix();
+
+                // Save default view so the ⊙ button can restore it
+                window._pcbDefaultView = {
+                    position: camera.position.clone(),
+                    target:   controls.target.clone()
+                };
 
                 // --- Place component markers ---
                 // Scene is now in mm, so boardFaceW/D are already in mm (≈132.5 / 110.9)
