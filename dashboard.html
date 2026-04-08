@@ -13,6 +13,15 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- SheetJS (Excel Export) -->
     <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <!-- Three.js PCB Viewer (ES modules via importmap) -->
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+    </script>
     
     <style>
         :root {
@@ -345,7 +354,7 @@
             transform: translateY(-2px);
         }
 
-        .chart-card.fullscreen, .table-section.fullscreen {
+        .chart-card.fullscreen, .table-section.fullscreen, .pcb-card.fullscreen {
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
@@ -375,9 +384,90 @@
         @media (max-width: 1100px) {
             .dashboard-content { grid-template-columns: 1fr; }
             .chart-card.wide { grid-column: span 1; }
+            .pcb-card { grid-column: span 1; }
             .kpi-row { grid-template-columns: 1fr 1fr; }
             .header-info { margin-left: 0; flex-direction: column; align-items: flex-start; gap: 1rem; }
             .navbar img { transform: none; height: 60px; }
+        }
+
+        /* PCB VIEWER */
+        .pcb-card {
+            grid-column: span 2;
+            background: var(--surface);
+            border: 1px solid var(--surface-border);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .pcb-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .pcb-card-header h3 { font-size: 1rem; font-weight: 600; color: var(--corp-text); }
+        .pcb-layout {
+            display: grid;
+            grid-template-columns: 1fr 280px;
+            gap: 16px;
+            height: 500px;
+        }
+        #pcbCanvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 10px;
+            background: #0a0f1e;
+            cursor: grab;
+            display: block;
+        }
+        #pcbCanvas:active { cursor: grabbing; }
+        .pcb-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow: hidden;
+        }
+        .pcb-legend {
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 12px;
+        }
+        .pcb-legend h4 { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+        .legend-gradient {
+            height: 14px;
+            border-radius: 6px;
+            background: linear-gradient(to right, #1a56db, #10b981, #fbbf24, #f43f5e);
+            margin-bottom: 4px;
+        }
+        .legend-labels { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-muted); }
+        .pcb-info-panel {
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 12px;
+            flex: 1;
+            overflow-y: auto;
+        }
+        .pcb-info-panel h4 { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+        .pcb-info-empty { color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 20px 0; }
+        .pcb-comp-name { font-size: 1.1rem; font-weight: 700; color: var(--corp-accent); margin-bottom: 4px; }
+        .pcb-comp-detail { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 2px; }
+        .pcb-repair-count { font-size: 1.8rem; font-weight: 800; color: var(--danger); margin: 8px 0 2px; }
+        .pcb-repair-label { font-size: 0.75rem; color: var(--text-muted); }
+        .pcb-top-list { margin-top: 10px; }
+        .pcb-top-item { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.8rem; }
+        .pcb-top-badge { background: rgba(244,63,94,0.2); color: #f43f5e; padding: 2px 7px; border-radius: 10px; font-weight: 700; font-size: 0.75rem; }
+        .pcb-loading { color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 10px 0; }
+        /* PCB fullscreen: layout expands to fill remaining height */
+        .pcb-card.fullscreen .pcb-layout {
+            flex: 1;
+            height: auto !important;
+        }
+        .pcb-card.fullscreen { display: flex; flex-direction: column; }
+        @media (max-width: 1100px) {
+            .pcb-layout { grid-template-columns: 1fr; height: auto; }
+            #pcbCanvas { height: 300px; }
+            .pcb-sidebar { height: 200px; }
         }
     </style>
 </head>
@@ -546,6 +636,34 @@
             </div>
         </div>
 
+        <!-- PCB HEATMAP VIEWER -->
+        <div class="pcb-card" id="card-pcbViewer">
+            <div class="pcb-card-header">
+                <h3>🔥 Mapa de Calor PCBA — Frecuencia de Reparaciones por Componente</h3>
+                <div style="display:flex;align-items:center;gap:12px">
+                    <span style="font-size:0.72rem;color:var(--text-muted)">
+                        🖱 Izq: rotar &nbsp;·&nbsp; Der: mover &nbsp;·&nbsp; Scroll: zoom &nbsp;·&nbsp; Clic: detalles
+                    </span>
+                    <button class="fullscreen-btn" onclick="togglePCBFullscreen()">⛶</button>
+                </div>
+            </div>
+            <div class="pcb-layout">
+                <canvas id="pcbCanvas"></canvas>
+                <div class="pcb-sidebar">
+                    <div class="pcb-legend">
+                        <h4>Escala de Calor</h4>
+                        <div class="legend-gradient"></div>
+                        <div class="legend-labels"><span>Sin reparaciones</span><span>Crítico</span></div>
+                    </div>
+                    <div class="pcb-info-panel" id="pcbInfoPanel">
+                        <h4>Detalle de Componente</h4>
+                        <div class="pcb-info-empty" id="pcbInfoEmpty">Haz clic en un componente para ver su historial de reparaciones</div>
+                        <div id="pcbInfoContent" style="display:none"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- RAW DATA TABLE -->
         <div class="table-section" id="card-tableSection">
             <div class="table-header">
@@ -600,6 +718,7 @@
                 fetchData()
             ]);
             hideLoader();
+            initPCBViewer();
         });
 
         async function loadLookupTables() {
@@ -1121,6 +1240,327 @@
                     if (charts[chartId]) charts[chartId].resize();
                 }
             }
+        }
+
+
+        function togglePCBFullscreen() {
+            const card = document.getElementById('card-pcbViewer');
+            card.classList.toggle('fullscreen');
+            // Give the browser one frame to apply the CSS, then resize the renderer
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    if (window._pcbResize) window._pcbResize();
+                });
+            });
+        }
+
+        // =============================================
+        // PCB 3D HEATMAP VIEWER
+        // =============================================
+        async function initPCBViewer() {
+            const canvas = document.getElementById('pcbCanvas');
+            if (!canvas) return;
+
+            const THREE = await import('three');
+            const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+            const { DRACOLoader } = await import('three/addons/loaders/DRACOLoader.js');
+            const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
+
+            // --- Scene setup ---
+            const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0f1e);
+
+            const camera = new THREE.PerspectiveCamera(45, 1, 0.001, 100000);
+            camera.position.set(0, 0, 200);
+            window._pcbCamera = camera;
+            window._pcbScene = scene;
+
+            const controls = new OrbitControls(camera, renderer.domElement);
+            window._pcbControls = controls;
+            controls.enableDamping      = true;
+            controls.dampingFactor      = 0.08;
+            controls.enablePan          = true;
+            controls.screenSpacePanning = true;   // pan moves parallel to screen
+            controls.panSpeed           = 1.2;
+            controls.mouseButtons = {
+                LEFT:   THREE.MOUSE.ROTATE,
+                MIDDLE: THREE.MOUSE.DOLLY,
+                RIGHT:  THREE.MOUSE.PAN
+            };
+
+            // Resize immediately — container has height:500px from CSS
+            const container = canvas.parentElement;
+            function resize() {
+                const w = Math.max(container.clientWidth - 280 - 16, 100);
+                const h = container.clientHeight || 500;
+                renderer.setSize(w, h);
+                camera.aspect = w / h;
+                camera.updateProjectionMatrix();
+            }
+            window._pcbResize = resize;   // exposed for fullscreen toggle
+            resize();
+
+            // Lighting
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const dir1 = new THREE.DirectionalLight(0xffffff, 1.2);
+            dir1.position.set(0.5, 1, 0.5);
+            scene.add(dir1);
+            const dir2 = new THREE.DirectionalLight(0x6699ff, 0.4);
+            dir2.position.set(-0.5, -0.5, -0.5);
+            scene.add(dir2);
+
+            // --- Load component data ---
+            let components = [];
+            try {
+                const resp = await fetch('assets/pcba_components.json');
+                components = await resp.json();
+            } catch(e) { console.warn('Could not load pcba_components.json', e); }
+
+            // --- Load repair heatmap data from Supabase ---
+            // Extract designator patterns from ubicacion text
+            const heatmap = {}; // designator -> count
+            try {
+                const { data: repData } = await sbClient
+                    .from('reparaciones')
+                    .select('ubicacion')
+                    .eq('tipo_registro', 'PCBA');
+                if (repData) {
+                    repData.forEach(r => {
+                        if (!r.ubicacion) return;
+                        const matches = r.ubicacion.toUpperCase().match(/\b([A-Z]{1,4}\d+)\b/g);
+                        if (matches) {
+                            matches.forEach(m => { heatmap[m] = (heatmap[m] || 0) + 1; });
+                        }
+                    });
+                }
+            } catch(e) { console.warn('Heatmap data error', e); }
+
+            const maxCount = Math.max(1, ...Object.values(heatmap));
+
+            // Color scale: blue -> green -> yellow -> red
+            function heatColor(count) {
+                if (count === 0) return new THREE.Color(0x1a56db);
+                const t = Math.min(count / maxCount, 1);
+                if (t < 0.33) return new THREE.Color().lerpColors(new THREE.Color(0x1a56db), new THREE.Color(0x10b981), t / 0.33);
+                if (t < 0.66) return new THREE.Color().lerpColors(new THREE.Color(0x10b981), new THREE.Color(0xfbbf24), (t - 0.33) / 0.33);
+                return new THREE.Color().lerpColors(new THREE.Color(0xfbbf24), new THREE.Color(0xf43f5e), (t - 0.66) / 0.34);
+            }
+
+            // --- Load GLB model ---
+            let boardBox = new THREE.Box3();
+            let boardCenter = new THREE.Vector3();
+            let boardSize = new THREE.Vector3();
+
+            const draco = new DRACOLoader();
+            draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/gltf/');
+            const loader = new GLTFLoader();
+            loader.setDRACOLoader(draco);
+            loader.load('assets/pcba_board.glb', (gltf) => {
+                const model = gltf.scene;
+                boardBox.setFromObject(model);
+                boardBox.getCenter(boardCenter);
+                boardBox.getSize(boardSize);
+
+                // Center the model at origin
+                model.position.sub(boardCenter);
+                scene.add(model);
+
+                // Board from SolidWorks GLB is in XZ plane: X=width, Z=depth, Y=thickness
+                // Identify which axis is the thin one (board thickness ~2mm vs ~120x100mm face)
+                const dims = [boardSize.x, boardSize.y, boardSize.z];
+                const minDimIdx = dims.indexOf(Math.min(...dims));
+                // boardFaceW and boardFaceD are the two large axes
+                let boardFaceW, boardFaceD, boardThickAxis;
+                if (minDimIdx === 1) {
+                    // Y is thickness → board face is XZ plane (typical SolidWorks/STEP export)
+                    boardFaceW = boardSize.x;
+                    boardFaceD = boardSize.z;
+                    boardThickAxis = 'y';
+                } else if (minDimIdx === 2) {
+                    boardFaceW = boardSize.x;
+                    boardFaceD = boardSize.y;
+                    boardThickAxis = 'z';
+                } else {
+                    boardFaceW = boardSize.y;
+                    boardFaceD = boardSize.z;
+                    boardThickAxis = 'x';
+                }
+                const maxDim = Math.max(boardFaceW, boardFaceD);
+                const halfThick = Math.min(...dims) * 0.5;
+                window._pcbDebug = { boardSize: {x: boardSize.x, y: boardSize.y, z: boardSize.z}, boardThickAxis, maxDim };
+
+                // Camera: nearly perpendicular to board face (like PCBdoc top-down view)
+                camera.near = maxDim * 0.001;
+                camera.far  = maxDim * 100;
+
+                // Component cluster center is ~5.22 mm above board center in world Y
+                const clusterOffsetY = boardFaceD * (5.22 / 110.9);   // ~0.00522 m
+
+                if (boardThickAxis === 'y') {
+                    camera.position.set(0, maxDim * 1.6, maxDim * 0.05);
+                } else if (boardThickAxis === 'z') {
+                    // Minimal Y tilt → near-flat view matching PCBdoc
+                    camera.position.set(0, maxDim * 0.04, maxDim * 1.6);
+                } else {
+                    camera.position.set(maxDim * 1.6, maxDim * 0.05, 0);
+                }
+                camera.lookAt(0, clusterOffsetY, 0);
+                controls.target.set(0, clusterOffsetY, 0);
+                controls.minDistance = maxDim * 0.3;
+                controls.maxDistance = maxDim * 8;
+                controls.update();
+                camera.updateProjectionMatrix();
+
+                // --- Place component markers ---
+                // Altium P&P: origin = board lower-left, Y increases upward (same as Three.js).
+                // Board is exactly 132.5 x 110.9 mm per Board Information report.
+                const boardMmW = boardFaceW * 1000; // world → mm (e.g. 132.5)
+                const boardMmD = boardFaceD * 1000; // world → mm (e.g. 110.9)
+
+                // Minimum marker height so it's always visible
+                const minH = maxDim * 0.003;
+
+                components.forEach(comp => {
+                    // Skip test points (T-prefixed designators) – not useful for repair tracking
+                    if (/^T\d/i.test(comp.d.trim())) return;
+
+                    const count = heatmap[comp.d.toUpperCase()] || 0;
+                    const color = heatColor(count);
+
+                    // Altium Y is already upward → no flip needed
+                    // Apply downward offset: the Altium board origin is above
+                    // the Pick & Place coordinate (0,0), so without this offset some
+                    // components near the top edge overflow the board outline.
+                    const yOffset = 5.0; // mm
+                    const nx = (comp.x / boardMmW) - 0.5;
+                    const ny = ((comp.y - yOffset) / boardMmD) - 0.5;
+
+                    // Real footprint size in world units (sx/sy are in mm from JSON)
+                    const mw = ((comp.sx || 1.6) / 1000) * 0.85; // world width
+                    const md = ((comp.sy || 0.8) / 1000) * 0.85; // world depth
+                    const mh = Math.max(minH, maxDim * 0.002);   // marker height
+
+                    let wx, wy, wz, geo;
+                    const layerKey = comp.lay || comp.layer || 'T';
+                    const topOffset = halfThick + mh * 0.5;
+                    const botOffset = -(halfThick + mh * 0.5);
+
+                    if (boardThickAxis === 'y') {
+                        wx = nx * boardFaceW;
+                        wz = ny * boardFaceD;
+                        wy = layerKey === 'T' ? topOffset : botOffset;
+                        geo = new THREE.BoxGeometry(mw, mh, md);
+                    } else if (boardThickAxis === 'z') {
+                        wx = nx * boardFaceW;
+                        wy = ny * boardFaceD;
+                        wz = layerKey === 'T' ? topOffset : botOffset;
+                        geo = new THREE.BoxGeometry(mw, md, mh);
+                    } else {
+                        wy = nx * boardFaceW;
+                        wz = ny * boardFaceD;
+                        wx = layerKey === 'T' ? topOffset : botOffset;
+                        geo = new THREE.BoxGeometry(mh, mw, md);
+                    }
+
+                    const mat = new THREE.MeshStandardMaterial({
+                        color,
+                        emissive: color,
+                        emissiveIntensity: count > 0 ? 0.8 : 0.25,
+                        roughness: 0.3,
+                        metalness: 0.2
+                    });
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(wx, wy, wz);
+
+                    // Apply Altium rotation around the board-normal axis
+                    const rotRad = ((comp.r || 0) * Math.PI) / 180;
+                    if (boardThickAxis === 'y') mesh.rotation.y = -rotRad;
+                    else if (boardThickAxis === 'z') mesh.rotation.z = -rotRad;
+                    else mesh.rotation.x = -rotRad;
+
+                    mesh.userData = {
+                        designator: comp.d, comment: comp.cmt,
+                        footprint: comp.fp, count, layer: layerKey
+                    };
+                    scene.add(mesh);
+                });
+
+                resize();
+            }, undefined, (err) => {
+                console.warn('GLB load error', err);
+                // Fallback: render a flat board placeholder so canvas isn't black
+                const geo = new THREE.BoxGeometry(122.7, 100.7, 2);
+                const mat = new THREE.MeshStandardMaterial({ color: 0x1a7a3a });
+                scene.add(new THREE.Mesh(geo, mat));
+                camera.position.set(0, 60, 180);
+                camera.lookAt(0, 0, 0);
+                controls.minDistance = 50;
+                controls.maxDistance = 500;
+                controls.update();
+                resize();
+            });
+
+            // --- Raycasting for click ---
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+
+            canvas.addEventListener('click', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                const meshes = scene.children.filter(c => c.isMesh && c.userData.designator);
+                const hits = raycaster.intersectObjects(meshes);
+                if (hits.length > 0) showComponentInfo(hits[0].object.userData);
+            });
+
+            function showComponentInfo(data) {
+                document.getElementById('pcbInfoEmpty').style.display = 'none';
+                const el = document.getElementById('pcbInfoContent');
+                el.style.display = 'block';
+                el.innerHTML = `
+                    <div class="pcb-comp-name">${data.designator}</div>
+                    <div class="pcb-comp-detail">Footprint: ${data.footprint || '-'}</div>
+                    <div class="pcb-comp-detail">Valor: ${data.comment || '-'}</div>
+                    <div class="pcb-comp-detail">Capa: ${data.layer === 'T' ? 'Top' : 'Bottom'}</div>
+                    <div class="pcb-repair-count">${data.count}</div>
+                    <div class="pcb-repair-label">reparacion(es) registrada(s)</div>
+                `;
+            }
+
+            // --- Render top repaired components list on sidebar ---
+            const topComps = Object.entries(heatmap)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 8);
+
+            if (topComps.length > 0) {
+                const panel = document.getElementById('pcbInfoContent');
+                document.getElementById('pcbInfoEmpty').style.display = 'none';
+                panel.style.display = 'block';
+                panel.innerHTML = `
+                    <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px;">Top componentes</div>
+                    <div class="pcb-top-list">
+                        ${topComps.map(([d, c]) => `
+                            <div class="pcb-top-item">
+                                <span style="color:var(--corp-text)">${d}</span>
+                                <span class="pcb-top-badge">${c}</span>
+                            </div>`).join('')}
+                    </div>
+                `;
+            }
+
+            // --- Animation loop ---
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update();
+                renderer.render(scene, camera);
+            }
+            animate();
+            window.addEventListener('resize', resize);
         }
 
     </script>
