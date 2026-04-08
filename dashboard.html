@@ -640,10 +640,12 @@
         <div class="pcb-card" id="card-pcbViewer">
             <div class="pcb-card-header">
                 <h3>🔥 Mapa de Calor PCBA — Frecuencia de Reparaciones por Componente</h3>
-                <div style="display:flex;align-items:center;gap:12px">
+                <div style="display:flex;align-items:center;gap:10px">
                     <span style="font-size:0.72rem;color:var(--text-muted)">
-                        🖱 Izq: rotar &nbsp;·&nbsp; Der: mover &nbsp;·&nbsp; Scroll: zoom &nbsp;·&nbsp; Clic: detalles
+                        🖱 Izq: rotar &nbsp;·&nbsp; Der: mover &nbsp;·&nbsp; Clic: detalles
                     </span>
+                    <button class="fullscreen-btn" onclick="pcbZoom(-1)" title="Acercar">＋</button>
+                    <button class="fullscreen-btn" onclick="pcbZoom(+1)" title="Alejar">－</button>
                     <button class="fullscreen-btn" onclick="togglePCBFullscreen()">⛶</button>
                 </div>
             </div>
@@ -1246,12 +1248,26 @@
         function togglePCBFullscreen() {
             const card = document.getElementById('card-pcbViewer');
             card.classList.toggle('fullscreen');
-            // Give the browser one frame to apply the CSS, then resize the renderer
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
                     if (window._pcbResize) window._pcbResize();
                 });
             });
+        }
+
+        // Zoom the PCB camera by a fixed 15% step.
+        // direction: -1 = zoom in (closer), +1 = zoom out (further)
+        function pcbZoom(direction) {
+            const cam = window._pcbCamera;
+            const ctrl = window._pcbControls;
+            if (!cam || !ctrl) return;
+            const factor = direction > 0 ? 1.15 : 1 / 1.15;
+            const offset = cam.position.clone().sub(ctrl.target);
+            const newDist = Math.max(ctrl.minDistance,
+                            Math.min(ctrl.maxDistance, offset.length() * factor));
+            offset.setLength(newDist);
+            cam.position.copy(ctrl.target).add(offset);
+            ctrl.update();
         }
 
         // =============================================
@@ -1283,15 +1299,30 @@
             window._pcbControls = controls;
             controls.enableDamping      = true;
             controls.dampingFactor      = 0.08;
-            controls.zoomSpeed          = 0.7;
+            controls.enableZoom         = false;    // use custom wheel handler below
             controls.enablePan          = true;
-            controls.screenSpacePanning = true;   // pan moves parallel to screen
+            controls.screenSpacePanning = true;
             controls.panSpeed           = 1.2;
             controls.mouseButtons = {
                 LEFT:   THREE.MOUSE.ROTATE,
                 MIDDLE: THREE.MOUSE.DOLLY,
                 RIGHT:  THREE.MOUSE.PAN
             };
+
+            // Custom scroll-wheel zoom: fixed 8% step per wheel tick regardless
+            // of deltaY magnitude (smooth-scroll mice send huge deltaY values that
+            // confuse OrbitControls into jumping between only 2 positions).
+            renderer.domElement.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const dir = Math.sign(e.deltaY);          // always -1 or +1
+                const factor = dir > 0 ? 1.08 : 1 / 1.08;
+                const offset = camera.position.clone().sub(controls.target);
+                const newDist = Math.max(controls.minDistance,
+                                Math.min(controls.maxDistance, offset.length() * factor));
+                offset.setLength(newDist);
+                camera.position.copy(controls.target).add(offset);
+                controls.update();
+            }, { passive: false });
 
             // Resize immediately — container has height:500px from CSS
             const container = canvas.parentElement;
